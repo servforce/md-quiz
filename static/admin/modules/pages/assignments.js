@@ -244,6 +244,74 @@ export function createAdminAssignmentsModule() {
       return this.attemptReviewQuestionKind(question) === "short";
     },
 
+    assignmentSuspectedAiQuestionIds(item) {
+      const rawIds = item?.suspected_ai_question_ids;
+      if (!Array.isArray(rawIds)) return [];
+      const ids = [];
+      const seen = new Set();
+      rawIds.forEach((value) => {
+        const qid = String(value || "").trim();
+        if (!qid || seen.has(qid)) return;
+        seen.add(qid);
+        ids.push(qid);
+      });
+      return ids;
+    },
+
+    assignmentSuspectedAiQuestionCount(item) {
+      const count = Number(item?.suspected_ai_question_count);
+      if (Number.isFinite(count) && count >= 0) {
+        return Math.floor(count);
+      }
+      return this.assignmentSuspectedAiQuestionIds(item).length;
+    },
+
+    assignmentHasCompletedGrading(item) {
+      return this.assignmentStatusValue(item) === "finished";
+    },
+
+    attemptSuspectedAiQuestionIds() {
+      return this.assignmentSuspectedAiQuestionIds(this.attemptDetail?.quiz_paper);
+    },
+
+    attemptSuspectedAiQuestionCount() {
+      return this.assignmentSuspectedAiQuestionCount(this.attemptDetail?.quiz_paper);
+    },
+
+    attemptQuestionIsSuspectedAi(question) {
+      const qid = String(question?.qid || "").trim();
+      return Boolean(qid) && this.attemptSuspectedAiQuestionIds().includes(qid);
+    },
+
+    attemptSuspectedAiButtonClass(question) {
+      const classes = ["attempt-suspected-ai-toggle"];
+      if (this.attemptQuestionIsSuspectedAi(question)) {
+        classes.push("attempt-suspected-ai-toggle--active");
+      }
+      return classes.join(" ");
+    },
+
+    async toggleAttemptSuspectedAi(question) {
+      if (!this.attemptReviewIsShortQuestion(question)) return;
+      const token = String(this.attemptDetail?.quiz_paper?.token || this.attemptDetail?.assignment?.token || "").trim();
+      const qid = String(question?.qid || "").trim();
+      if (!token || !qid) return;
+      const suspected = !this.attemptQuestionIsSuspectedAi(question);
+      const result = await this.api(`/api/admin/assignments/${encodeURIComponent(token)}/suspected-ai-question`, {
+        method: "POST",
+        body: JSON.stringify({ qid, suspected }),
+        headers: { "Content-Type": "application/json" },
+      });
+      const updatedItem = result?.item;
+      if (updatedItem && typeof updatedItem === "object") {
+        this.applyAssignmentItemUpdate(updatedItem, { updateAttemptDetail: false });
+        this.syncAttemptSuspectedAiQuestionState(updatedItem);
+      } else {
+        await this.loadAttemptDetail(token, { quiet: true });
+      }
+      this.showNotice(suspected ? "已标记为疑似 AI" : "已取消疑似 AI 标记");
+    },
+
     attemptReviewIsTraitQuestion(question) {
       return this.attemptReviewQuestionKind(question) === "traits";
     },
@@ -694,7 +762,7 @@ export function createAdminAssignmentsModule() {
       this.assignments.summary.unhandled_finished_count = Math.max(0, current + (nextNeedsAttention ? 1 : -1));
     },
 
-    applyAssignmentItemUpdate(updatedItem) {
+    applyAssignmentItemUpdate(updatedItem, { updateAttemptDetail = true } = {}) {
       const token = String(updatedItem?.token || "").trim();
       if (!token) return;
       const items = Array.isArray(this.assignments?.items) ? this.assignments.items : [];
@@ -710,12 +778,24 @@ export function createAdminAssignmentsModule() {
         items: nextItems,
         summary: this.assignments?.summary || { unhandled_finished_count: 0 },
       };
-      if (String(this.attemptDetail?.quiz_paper?.token || "").trim() === token) {
+      if (updateAttemptDetail && String(this.attemptDetail?.quiz_paper?.token || "").trim() === token) {
         this.attemptDetail = {
           ...(this.attemptDetail || {}),
           quiz_paper: { ...(this.attemptDetail?.quiz_paper || {}), ...updatedItem },
         };
       }
+    },
+
+    syncAttemptSuspectedAiQuestionState(updatedItem) {
+      const token = String(updatedItem?.token || "").trim();
+      const currentToken = String(this.attemptDetail?.quiz_paper?.token || this.attemptDetail?.assignment?.token || "").trim();
+      if (!token || token !== currentToken) return;
+      const questionIds = this.assignmentSuspectedAiQuestionIds(updatedItem);
+      const count = this.assignmentSuspectedAiQuestionCount(updatedItem);
+      const quizPaper = this.attemptDetail?.quiz_paper;
+      if (!quizPaper || typeof quizPaper !== "object") return;
+      quizPaper.suspected_ai_question_ids = questionIds;
+      quizPaper.suspected_ai_question_count = count;
     },
 
     syncStatus() {
@@ -1006,13 +1086,17 @@ export function createAdminAssignmentsModule() {
       const previousStatus = this.assignmentStatusValue(this.attemptDetail?.quiz_paper);
       const data = await this.api(`/api/admin/attempts/${encodeURIComponent(currentToken)}`, { quiet });
       if (!data) return;
-      this.attemptDetail = {
+      const nextDetail = {
         assignment: data?.assignment || {},
         quiz_paper: data?.quiz_paper || {},
         archive: data?.archive || {},
         review: data?.review || { answers: [], evaluation: {} },
       };
-      const nextStatus = this.assignmentStatusValue(this.attemptDetail?.quiz_paper);
+      const detailChanged = JSON.stringify(this.attemptDetail) !== JSON.stringify(nextDetail);
+      if (detailChanged) {
+        this.attemptDetail = nextDetail;
+      }
+      const nextStatus = this.assignmentStatusValue(nextDetail.quiz_paper);
       if (currentToken) {
         this.assignmentStatusSnapshot = {
           ...(this.assignmentStatusSnapshot || {}),
@@ -1030,8 +1114,10 @@ export function createAdminAssignmentsModule() {
       if (this.route.name === "attempt-detail") {
         this.scheduleAssignmentsPolling();
       }
-      await this.$nextTick();
-      this.queueMathTypeset();
+      if (detailChanged) {
+        await this.$nextTick();
+        this.queueMathTypeset();
+      }
     },
 
   };

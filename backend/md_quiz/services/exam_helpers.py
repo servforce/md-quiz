@@ -743,6 +743,7 @@ def _list_exams():
                 "current_version_no": int(row.get("current_version_no") or 0),
                 "source_path": str(row.get("source_path") or "").strip(),
                 "last_sync_error": str(row.get("last_sync_error") or ""),
+                "updated_at": updated_at,
                 "_mtime": mtime,
             }
         )

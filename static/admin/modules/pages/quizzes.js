@@ -47,6 +47,21 @@ export function createAdminQuizzesModule() {
       }).format(date);
     },
 
+    quizListRespondentBadgeClass() {
+      const base = "rounded-full border px-2.5 py-1 text-xs font-normal";
+      const active = String(this.filters?.quizzes?.sortBy || "").trim() === "respondent_count";
+      return active
+        ? `${base} border-blue-200 bg-blue-50 text-blue-700`
+        : `${base} border-slate-200 bg-slate-100 text-slate-600`;
+    },
+
+    quizListUpdateTimeClass() {
+      const active = String(this.filters?.quizzes?.sortBy || "").trim() === "updated_at";
+      return active
+        ? "shrink-0 whitespace-nowrap text-xs font-normal tabular-nums text-blue-700"
+        : "shrink-0 whitespace-nowrap text-xs font-normal tabular-nums text-slate-500";
+    },
+
     quizOptionItems() {
       if (Array.isArray(this.quizOptions) && this.quizOptions.length) {
         return this.quizOptions;
@@ -165,6 +180,8 @@ export function createAdminQuizzesModule() {
     async loadQuizzes({ quiet = false, source = "manual", previousSyncStatus = "", previousSyncJobId = "" } = {}) {
       const query = new URLSearchParams();
       if (this.filters.quizzes.q) query.set("q", this.filters.quizzes.q);
+      query.set("sort_by", this.filters.quizzes.sortBy || "updated_at");
+      query.set("sort_order", this.filters.quizzes.sortOrder || "desc");
       const data = await this.api(`/api/admin/quizzes?${query.toString()}`, { quiet });
       if (!data) return;
       this.quizzes = data;
@@ -194,6 +211,11 @@ export function createAdminQuizzesModule() {
           this.showNotice(currentSyncStatus === "done" ? "测验同步完成，列表已刷新" : "测验同步失败");
         }
       }
+    },
+
+    async toggleQuizSortOrder() {
+      this.filters.quizzes.sortOrder = this.filters.quizzes.sortOrder === "asc" ? "desc" : "asc";
+      await this.loadQuizzes();
     },
 
     async bindRepo() {
@@ -247,9 +269,29 @@ export function createAdminQuizzesModule() {
     },
 
     async loadQuizDetail(quizKey) {
-      this.quizDetail = await this.api(`/api/admin/quizzes/${encodeURIComponent(quizKey)}`);
+      this.quizDetailSideTab = "analytics";
+      const [detail] = await Promise.all([
+        this.api(`/api/admin/quizzes/${encodeURIComponent(quizKey)}`),
+        this.loadQuizAnalyticsDetail(quizKey, { quiet: true, syncRoute: false }),
+      ]);
+      this.quizDetail = detail;
       await this.$nextTick();
       this.queueMathTypeset();
+    },
+
+    quizDetailPanelVisible(tabId) {
+      const key = String(tabId || "").trim();
+      if (!key) return false;
+      if (this.isAdminCompactLayout) {
+        return this.adminCompactPanelVisible("quiz-detail", key);
+      }
+      return String(this.quizDetailSideTab || "analytics").trim() === key;
+    },
+
+    setQuizDetailSideTab(tabId) {
+      const key = String(tabId || "").trim();
+      if (!["analytics", "history"].includes(key)) return;
+      this.quizDetailSideTab = key;
     },
 
     async loadQuizVersion(versionId) {

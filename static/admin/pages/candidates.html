@@ -24,23 +24,47 @@
     x-show="adminCompactPanelVisible('candidates', 'list')"
     class="admin-candidate-list admin-surface admin-edge-panel overflow-hidden rounded-3xl border border-white/70 bg-white/82 shadow-[var(--admin-shadow)] backdrop-blur-xl"
   >
-    <div class="flex flex-col gap-3 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
-      <div>
-        <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">候选人</h2>
-        <p class="mt-1 text-sm text-slate-600">支持搜索、创建、详情查看与简历入库。</p>
+    <div class="flex flex-wrap items-center gap-2 px-5 py-4">
+      <h2 class="shrink-0 text-xl font-semibold tracking-[-0.03em] text-slate-900">候选人</h2>
+
+      <div class="flex min-w-0 flex-wrap items-center gap-1.5" style="flex: 1 1 420px">
+        <label x-data="{ composing: false }" class="block min-w-0" style="flex: 1 1 0; min-width: 160px">
+          <input
+            x-model="filters.candidates.q"
+            @input="if (!composing) scheduleCandidatesReloadFromFirstPage()"
+            @change="reloadCandidatesFromFirstPage"
+            @compositionstart="composing = true"
+            @compositionend="composing = false; scheduleCandidatesReloadFromFirstPage()"
+            @keydown.enter.prevent="if (!composing) $event.target.blur()"
+            aria-label="搜索姓名或手机号"
+            class="h-9 w-full rounded-lg border border-blue-100 bg-white px-3 text-xs outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            placeholder="搜索姓名/手机号"
+          />
+        </label>
+        <div class="inline-flex min-w-0 flex-nowrap items-center gap-1.5" style="flex: 0 0 256px; min-width: 256px" role="group" aria-label="创建时间">
+          <label class="block min-w-0" style="flex: 1 1 0; min-width: 0">
+            <input
+              type="date"
+              x-model="filters.candidates.created_from"
+              @change="reloadCandidatesFromFirstPage"
+              aria-label="创建时间开始日期"
+              style="min-width: 0"
+              class="h-9 w-full rounded-lg border border-blue-100 bg-white px-1.5 text-xs text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+          <label class="block min-w-0" style="flex: 1 1 0; min-width: 0">
+            <input
+              type="date"
+              x-model="filters.candidates.created_to"
+              @change="reloadCandidatesFromFirstPage"
+              aria-label="创建时间结束日期"
+              style="min-width: 0"
+              class="h-9 w-full rounded-lg border border-blue-100 bg-white px-1.5 text-xs text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+        </div>
       </div>
-      <div x-data="{ composing: false }" class="min-w-0 w-full lg:w-[20rem]">
-        <input
-          x-model="filters.candidates.q"
-          @input="if (!composing) scheduleCandidatesReloadFromFirstPage()"
-          @change="reloadCandidatesFromFirstPage"
-          @compositionstart="composing = true"
-          @compositionend="composing = false; scheduleCandidatesReloadFromFirstPage()"
-          @keydown.enter.prevent="if (!composing) $event.target.blur()"
-          class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-300"
-          placeholder="搜索姓名/手机号"
-        />
-      </div>
+      <p class="text-sm text-slate-600" style="flex: 1 0 100%">支持搜索、创建、详情查看与简历入库。</p>
     </div>
 
     <div class="admin-candidate-items divide-y divide-blue-100/70 border-t border-blue-100/70">

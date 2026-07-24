@@ -95,27 +95,45 @@ export function createAdminJobDescriptionsModule() {
       return this.quizOptionItems();
     },
 
-    jobDescriptionRelatedQuizSelected(quizKey) {
-      const key = String(quizKey || "").trim();
-      return Boolean(key) && this.normalizeJobDescriptionRelatedQuizzes(this.jobDescriptionForm?.related_quizzes).includes(key);
+    jobDescriptionRelatedQuizItems() {
+      return this.normalizeJobDescriptionRelatedQuizzes(this.jobDescriptionForm?.related_quizzes)
+        .map((quizKey) => {
+          const option = this.quizOptionByKey(quizKey);
+          return {
+            quiz_key: quizKey,
+            title: String(option?.title || option?.quiz_key || quizKey).trim(),
+          };
+        });
     },
 
-    toggleJobDescriptionRelatedQuiz(quizKey) {
+    jobDescriptionRelatedQuizSearchResults(query = "") {
+      const keyword = String(query || "").trim().toLocaleLowerCase();
+      if (!keyword) return [];
+      const selected = new Set(this.normalizeJobDescriptionRelatedQuizzes(this.jobDescriptionForm?.related_quizzes));
+      return this.jobDescriptionRelatedQuizOptions().filter((quiz) => {
+        const quizKey = String(quiz?.quiz_key || "").trim();
+        if (!quizKey || selected.has(quizKey)) return false;
+        const searchable = `${quiz?.title || ""} ${quizKey}`.toLocaleLowerCase();
+        return searchable.includes(keyword);
+      });
+    },
+
+    addJobDescriptionRelatedQuiz(quizKey) {
       if (this.jobDescriptionReadOnly()) return;
       const key = String(quizKey || "").trim();
       if (!key) return;
       const current = this.normalizeJobDescriptionRelatedQuizzes(this.jobDescriptionForm?.related_quizzes);
-      if (current.includes(key)) {
-        this.jobDescriptionForm.related_quizzes = current.filter((item) => item !== key);
-      } else {
-        this.jobDescriptionForm.related_quizzes = [...current, key];
-      }
+      if (current.includes(key)) return;
+      this.jobDescriptionForm.related_quizzes = [...current, key];
     },
 
-    jobDescriptionRelatedQuizLabels() {
-      return this.normalizeJobDescriptionRelatedQuizzes(this.jobDescriptionForm?.related_quizzes)
-        .map((quizKey) => this.quizOptionLabel(quizKey) || quizKey)
-        .filter(Boolean);
+    removeJobDescriptionRelatedQuiz(quizKey) {
+      if (this.jobDescriptionReadOnly()) return;
+      const key = String(quizKey || "").trim();
+      if (!key) return;
+      this.jobDescriptionForm.related_quizzes = this.normalizeJobDescriptionRelatedQuizzes(
+        this.jobDescriptionForm?.related_quizzes,
+      ).filter((item) => item !== key);
     },
 
     async setJobDescriptionContentTab(key) {

@@ -775,6 +775,8 @@ export function createAdminCandidatesModule() {
       const nextPage = this.normalizeCandidatesPage(page, this.candidates?.page || 1);
       query.set("page", String(nextPage));
       if (this.filters.candidates.q) query.set("q", this.filters.candidates.q);
+      if (this.filters.candidates.created_from) query.set("created_from", this.filters.candidates.created_from);
+      if (this.filters.candidates.created_to) query.set("created_to", this.filters.candidates.created_to);
       const data = await this.api(`/api/admin/candidates?${query.toString()}`, { quiet });
       if (!data) return;
       this.candidates = {

@@ -214,37 +214,92 @@
             </select>
           </label>
         </div>
-        <div class="mt-2 border-t border-blue-100/70 pt-2">
-          <div class="flex flex-wrap items-center justify-between gap-2">
+        <div x-data="{ adding: false, query: '' }" class="mt-2 border-t border-blue-100/70 pt-2">
+          <div class="flex flex-wrap items-center gap-2">
             <span class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">关联试题</span>
-            <span
-              x-show="jobDescriptionRelatedQuizLabels().length"
-              class="max-w-full truncate text-[11px] text-slate-500"
-              x-text="jobDescriptionRelatedQuizLabels().join('、')"
-            ></span>
           </div>
+
           <div class="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            <template x-for="quiz in jobDescriptionRelatedQuizOptions()" :key="quiz.quiz_key">
-              <label
-                class="flex min-w-0 items-start gap-2 rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm transition"
-                :class="jobDescriptionRelatedQuizSelected(quiz.quiz_key) ? 'border-blue-300 bg-blue-50/80 text-blue-800' : 'text-slate-700 hover:bg-blue-50/45'"
-              >
-                <input
-                  type="checkbox"
-                  class="mt-0.5 h-4 w-4 rounded border-blue-200 text-blue-600 focus:ring-blue-500"
-                  :checked="jobDescriptionRelatedQuizSelected(quiz.quiz_key)"
-                  :disabled="jobDescriptionReadOnly()"
-                  @change="toggleJobDescriptionRelatedQuiz(quiz.quiz_key)"
-                />
-                <span class="min-w-0">
-                  <span class="block truncate font-medium" x-text="quiz.title || quiz.quiz_key"></span>
-                  <span class="mt-0.5 block truncate font-mono text-[11px] text-slate-400" x-text="quiz.quiz_key"></span>
-                </span>
-              </label>
+            <template x-for="quiz in jobDescriptionRelatedQuizItems()" :key="quiz.quiz_key">
+              <article class="min-w-0 rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm text-slate-700">
+                <div class="flex items-start justify-between gap-2">
+                  <span class="min-w-0">
+                    <span class="block truncate font-medium" x-text="quiz.title"></span>
+                    <span class="mt-0.5 block truncate font-mono text-[11px] text-slate-400" x-text="quiz.quiz_key"></span>
+                  </span>
+                  <button
+                    type="button"
+                    @click="removeJobDescriptionRelatedQuiz(quiz.quiz_key)"
+                    :disabled="jobDescriptionReadOnly()"
+                    :class="jobDescriptionReadOnly() ? 'cursor-not-allowed opacity-45' : ''"
+                    class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400 transition"
+                    :aria-label="'移除试题：' + quiz.title"
+                    title="移除试题"
+                  >
+                    <span class="material-symbols-rounded text-base">close</span>
+                  </button>
+                </div>
+              </article>
             </template>
-            <div x-show="!jobDescriptionRelatedQuizOptions().length" class="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
-              暂无可关联试题
-            </div>
+
+            <button
+              x-show="!adding"
+              type="button"
+              @click="adding = true"
+              :disabled="jobDescriptionReadOnly()"
+              :class="jobDescriptionReadOnly() ? 'cursor-not-allowed opacity-45' : ''"
+              class="inline-flex items-center justify-center rounded-lg border border-dashed border-blue-200 bg-white/55 py-6 text-blue-600 transition"
+              aria-label="添加关联试题"
+              title="添加关联试题"
+            >
+              <span class="material-symbols-rounded text-xl">add</span>
+            </button>
+
+            <article
+              x-show="adding"
+              x-transition.opacity.duration.150ms
+              @keydown.escape.prevent="adding = false; query = ''"
+              class="min-w-0 rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2"
+            >
+              <input
+                x-model="query"
+                @blur="adding = false; query = ''"
+                :disabled="jobDescriptionReadOnly()"
+                class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-300"
+                placeholder="输入试题名称或 ID"
+                aria-label="搜索要关联的试题"
+              />
+              <div x-show="query.trim()" class="mt-2 overflow-hidden rounded-lg border border-blue-100 bg-white">
+                <template x-for="quiz in jobDescriptionRelatedQuizSearchResults(query)" :key="quiz.quiz_key">
+                  <div class="grid grid-cols-[minmax(0,1fr)_3rem] items-center gap-2 border-b border-blue-100/70 px-3 py-2">
+                    <span class="min-w-0">
+                      <span class="block truncate text-sm font-medium text-slate-700" x-text="quiz.title || quiz.quiz_key"></span>
+                      <span class="mt-0.5 block truncate font-mono text-[11px] text-slate-400" x-text="quiz.quiz_key"></span>
+                    </span>
+                    <button
+                      type="button"
+                      @mousedown.prevent
+                      @click="addJobDescriptionRelatedQuiz(quiz.quiz_key); query = ''"
+                      :disabled="jobDescriptionReadOnly()"
+                      :class="jobDescriptionReadOnly() ? 'cursor-not-allowed opacity-45' : ''"
+                      class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-600"
+                      :aria-label="'添加试题：' + (quiz.title || quiz.quiz_key)"
+                      title="添加试题"
+                    >
+                      <span class="material-symbols-rounded text-base">add</span>
+                    </button>
+                  </div>
+                </template>
+                <div
+                  x-show="!jobDescriptionRelatedQuizSearchResults(query).length"
+                  class="px-3 py-2 text-sm text-slate-500"
+                >未找到可添加的试题</div>
+              </div>
+            </article>
+          </div>
+
+          <div x-show="!jobDescriptionRelatedQuizOptions().length" class="mt-2 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500">
+            暂无可关联试题
           </div>
         </div>
       </section>

@@ -89,12 +89,12 @@
                     :class="assignmentCardClass(item)"
                   >
                     <div class="min-w-0">
-                      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                        <div class="min-w-0 flex-1">
-                          <div class="text-lg font-semibold text-slate-900" x-text="item.candidate_name"></div>
+                      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+                        <div class="min-w-0 sm:flex-none sm:shrink-0">
+                          <div class="whitespace-nowrap text-lg font-semibold text-slate-900" :title="item.candidate_name" x-text="item.candidate_name"></div>
                           <div class="mt-1 font-mono text-xs text-slate-500" x-text="item.token"></div>
                         </div>
-                        <div class="flex max-w-full flex-wrap items-center justify-end gap-2 sm:ml-auto sm:flex-nowrap">
+                        <div class="flex max-w-full flex-wrap items-center justify-end gap-2 sm:ml-auto sm:shrink-0 sm:flex-nowrap">
                           <div class="flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
                             <span :class="assignmentSourceBadgeClass()" x-text="item.source_label"></span>
                             <span :class="assignmentStatusBadgeClass(item)" x-text="item.status_label"></span>
@@ -129,6 +129,11 @@
                             >删除邀约</button>
                           </div>
                         </div>
+                      </div>
+                      <div x-show="assignmentHasCompletedGrading(item)" class="mt-3">
+                        <span class="assignment-badge border-rose-200 bg-rose-50 text-rose-700">
+                          疑似AI-<span class="tabular-nums" x-text="assignmentSuspectedAiQuestionCount(item)"></span>道
+                        </span>
                       </div>
                       <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                         <span

@@ -106,6 +106,11 @@ class AssignmentHandlingPayload(BaseModel):
     handled: bool
 
 
+class AssignmentSuspectedAiQuestionPayload(BaseModel):
+    qid: str
+    suspected: bool
+
+
 def _require_admin(request: Request) -> None:
     if not request.session.get("admin_logged_in"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="需要先登录后台")
@@ -600,6 +605,7 @@ def _serialize_exam_summary(exam: dict[str, Any], request: Request) -> dict[str,
         "source_path": str(exam.get("source_path") or "").strip(),
         "last_sync_error": str(exam.get("last_sync_error") or "").strip(),
         "updated_at": _iso_or_empty(exam.get("updated_at")),
+        "respondent_count": int(exam.get("respondent_count") or 0),
         "public_invite_enabled": bool(cfg.get("enabled")),
         "public_invite_token": public_token,
         "public_invite_url": (
@@ -1053,6 +1059,16 @@ def _serialize_assignment_row(row: dict[str, Any], *, request: Request) -> dict[
         ignore_timing = bool((assignment or row).get("ignore_timing"))
     handled_at = _iso_or_empty(row.get("handled_at"))
     handled_by = str(row.get("handled_by") or "").strip()
+    raw_suspected_ai_question_ids = row.get("suspected_ai_question_ids")
+    suspected_ai_question_ids: list[str] = []
+    seen_suspected_ai_question_ids: set[str] = set()
+    if isinstance(raw_suspected_ai_question_ids, list):
+        for value in raw_suspected_ai_question_ids:
+            qid = str(value or "").strip()
+            if not qid or qid in seen_suspected_ai_question_ids:
+                continue
+            seen_suspected_ai_question_ids.add(qid)
+            suspected_ai_question_ids.append(qid)
     needs_attention = bool(status_key == "finished" and not handled_at)
     return {
         "attempt_id": int(row.get("attempt_id") or 0),
@@ -1076,6 +1092,8 @@ def _serialize_assignment_row(row: dict[str, Any], *, request: Request) -> dict[
         "handled_at": handled_at,
         "handled_by": handled_by,
         "needs_attention": needs_attention,
+        "suspected_ai_question_ids": suspected_ai_question_ids,
+        "suspected_ai_question_count": len(suspected_ai_question_ids),
         "score": score,
         "score_max": score_max,
         "score_display": _score_display(score, score_max, result_mode=result_mode),
@@ -1640,7 +1658,7 @@ def _serialize_quiz_analytics_detail(
             "current_version_no": int(exam.get("current_version_no") or 0),
             "supports_version_scope_switch": current_version_id > 0,
             "available_versions": available_versions,
-            "url": f"{_admin_base_url(request)}/admin/quiz-analytics?quiz_key={quiz_key}",
+            "url": f"{_admin_base_url(request)}/admin/quizzes/{quiz_key}",
         },
         "filters": {
             "window": window_key,

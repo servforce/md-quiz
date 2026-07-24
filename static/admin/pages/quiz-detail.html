@@ -5,7 +5,12 @@
               data-admin-compact-tabs="quiz-detail"
               class="hidden admin-compact-tabs md:block xl:hidden"
             >
-              <div class="admin-compact-tabs__track" role="tablist" aria-label="测验详情内容切换">
+              <div
+                class="admin-compact-tabs__track"
+                :style="route.name === 'quiz-detail' ? { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' } : {}"
+                role="tablist"
+                aria-label="测验详情内容切换"
+              >
                 <template x-for="tab in adminCompactTabs('quiz-detail')" :key="tab.id">
                   <button
                     type="button"
@@ -22,9 +27,9 @@
 
               <section
                 x-show="adminCompactPanelVisible('quiz-detail', 'content')"
-                class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+                class="admin-surface min-w-0 rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
               >
-              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div class="flex flex-col gap-3 pb-2 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
                     <h2 class="truncate text-2xl font-semibold tracking-[-0.03em] text-slate-900" x-text="quizDetail.quiz?.title || quizDetail.quiz?.quiz_key"></h2>
@@ -49,7 +54,7 @@
                 </button>
               </div>
 
-              <div class="mt-5 grid gap-4">
+              <div class="mt-3 grid gap-4">
                 <div class="admin-quiz-overview-card overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/70">
                   <div class="admin-quiz-summary-split">
                     <section class="admin-quiz-summary-score px-4 py-4 md:px-5">
@@ -119,7 +124,7 @@
 
               <article
                 x-show="quizDetail.selected_quiz_version?.spec?.welcome_image"
-                class="relative mt-5 overflow-hidden rounded-3xl border border-blue-100/90 bg-slate-950 shadow-[0_12px_30px_rgba(37,99,235,0.10)]"
+                class="relative mt-5 overflow-hidden rounded-xl border border-blue-100/90 bg-slate-950"
               >
                 <img
                   :src="quizDetail.selected_quiz_version?.spec?.welcome_image || ''"
@@ -137,7 +142,7 @@
                 </div>
               </article>
 
-              <div class="mt-6">
+              <div class="mt-3 pt-2">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">测验浏览</div>
@@ -154,10 +159,10 @@
                   </div>
                 </div>
 
-                <div x-show="quizQuestions().length" class="mt-4 grid gap-3">
+                <div x-show="quizQuestions().length" class="mt-4 overflow-hidden border-b border-t border-blue-100/90 bg-white">
                   <template x-for="(question, index) in quizQuestions()" :key="question.qid || index">
-                    <article class="overflow-hidden rounded-3xl border border-blue-100/90 bg-white shadow-[0_12px_30px_rgba(37,99,235,0.08)]">
-                      <div class="border-b border-slate-200/80 bg-linear-to-r from-blue-50/90 via-white to-emerald-50/70 px-4 py-3">
+                    <article class="border-b border-blue-100/90 last:border-b-0">
+                      <div class="border-b border-slate-200/80 bg-blue-50/70 px-4 py-3">
                         <div class="flex items-center justify-between gap-3">
                           <div class="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden">
                             <span class="shrink-0 text-[17px] font-black tracking-[-0.03em] text-slate-900" x-text="question.label || question.qid || ('Q' + (index + 1))"></span>
@@ -178,10 +183,10 @@
                         <div class="quiz-rich admin-markdown text-sm leading-6 text-slate-800" x-html="question.stem_html || ''"></div>
 
                         <template x-if="(question.options || []).length">
-                          <div class="mt-3 overflow-hidden rounded-xl border border-blue-100 bg-slate-50/80 divide-y divide-blue-100">
+                          <div class="mt-3 border-b border-t border-blue-100 divide-y divide-blue-100">
                             <template x-for="option in (question.options || [])" :key="`${question.qid || index}-${option.key || option.text || ''}`">
                               <div
-                                :class="option.correct ? 'bg-emerald-50/70' : 'bg-slate-50/80'"
+                                :class="option.correct ? 'bg-emerald-50/70' : ''"
                                 class="flex items-center gap-2.5 px-3 py-2.5"
                               >
                                 <span class="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-white px-1.5 text-[11px] font-semibold text-blue-700" x-text="option.key || '-'"></span>
@@ -201,9 +206,9 @@
                         </template>
 
                         <template x-if="question.rubric">
-                          <details class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80">
-                            <summary class="cursor-pointer px-3.5 py-2.5 text-[13px] font-medium text-slate-700">评分标准</summary>
-                            <div class="quiz-rich admin-markdown border-t border-slate-200 px-3.5 py-2.5 text-[11px] leading-5 text-slate-600" x-html="question.rubric_html || ''"></div>
+                          <details class="mt-3 border-t border-slate-200">
+                            <summary class="cursor-pointer py-2.5 text-[13px] font-medium text-slate-700">评分标准</summary>
+                            <div class="quiz-rich admin-markdown border-t border-slate-200 py-2.5 text-[11px] leading-5 text-slate-600" x-html="question.rubric_html || ''"></div>
                           </details>
                         </template>
                       </div>
@@ -211,14 +216,14 @@
                   </template>
                 </div>
 
-                <div x-show="!quizQuestions().length" class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/75 px-6 py-10 text-center">
+                <div x-show="!quizQuestions().length" class="mt-4 border-b border-t border-dashed border-slate-200 px-6 py-10 text-center">
                   <div class="text-sm font-semibold text-slate-700">当前版本暂无可预览题目</div>
                   <p class="mt-2 text-sm leading-6 text-slate-500">请检查该版本快照是否包含 `questions` 数据。</p>
                 </div>
 
                 <article
                   x-show="quizDetail.selected_quiz_version?.spec?.end_image"
-                  class="relative mt-4 overflow-hidden rounded-3xl border border-blue-100/90 bg-slate-950 shadow-[0_12px_30px_rgba(37,99,235,0.10)]"
+                  class="relative mt-4 overflow-hidden rounded-xl border border-blue-100/90 bg-slate-950"
                 >
                   <img
                     :src="quizDetail.selected_quiz_version?.spec?.end_image || ''"
@@ -239,58 +244,273 @@
             </section>
 
             <section
-              x-show="adminCompactPanelVisible('quiz-detail', 'history')"
+              x-show="quizDetailPanelVisible('analytics') || quizDetailPanelVisible('history')"
+              x-cloak
               class="admin-surface admin-sticky-aside rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">版本历史</h2>
-                  <p class="mt-1 text-sm text-slate-600">点击切换浏览不同版本的测验内容。</p>
+              <div class="flex flex-col gap-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900" x-text="quizDetailPanelVisible('analytics') ? '测验分析' : '版本历史'"></h2>
+                    <p
+                      class="mt-1 text-sm text-slate-600"
+                      x-text="quizDetailPanelVisible('analytics') ? '查看当前测验的答题趋势、分布和记录。' : '点击切换浏览不同版本的测验内容。'"
+                    ></p>
+                  </div>
+                  <div
+                    x-show="quizDetailPanelVisible('analytics')"
+                    class="shrink-0 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+                  >
+                    <span x-text="quizAnalyticsDetail.filters?.window_label || '最近一个月'"></span>
+                  </div>
+                  <div
+                    x-show="quizDetailPanelVisible('history')"
+                    class="shrink-0 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+                  >
+                    <span x-text="(quizDetail.quiz_version_history || []).length"></span>
+                    个版本
+                  </div>
                 </div>
-                <div class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                  <span x-text="(quizDetail.quiz_version_history || []).length"></span>
-                  个版本
+
+                <div x-show="!isAdminCompactLayout" class="flex w-full gap-2" role="tablist" aria-label="测验详情侧栏">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setQuizDetailSideTab('analytics')"
+                    :aria-selected="String(quizDetailPanelVisible('analytics'))"
+                    :class="quizDetailPanelVisible('analytics') ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-blue-100 text-slate-500 hover:text-blue-700'"
+                    class="flex-1 rounded-lg border-b-2 px-3 py-2 text-sm font-semibold transition"
+                  >测验分析</button>
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setQuizDetailSideTab('history')"
+                    :aria-selected="String(quizDetailPanelVisible('history'))"
+                    :class="quizDetailPanelVisible('history') ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-blue-100 text-slate-500 hover:text-blue-700'"
+                    class="flex-1 rounded-lg border-b-2 px-3 py-2 text-sm font-semibold transition"
+                  >版本历史</button>
                 </div>
               </div>
 
               <div class="admin-sticky-aside__body">
-                <div class="mt-4 space-y-3">
-                  <template x-for="version in quizDetail.quiz_version_history || []" :key="version.id">
-                    <button
-                      type="button"
-                      @click="loadQuizVersion(version.id)"
-                      :class="version.is_selected ? 'border-blue-300 bg-blue-50/70 shadow-[0_12px_28px_rgba(37,99,235,0.10)]' : 'border-blue-100 bg-white hover:border-blue-200 hover:bg-blue-50/40'"
-                      class="w-full rounded-xl border p-4 text-left transition"
-                    >
-                      <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <div class="font-semibold text-slate-900">版本 <span x-text="version.version_no || version.id"></span></div>
-                            <span x-show="version.is_current" class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">当前</span>
-                            <span x-show="version.is_selected && !version.is_current" class="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700">已选</span>
+                <section x-show="quizDetailPanelVisible('analytics')" x-cloak class="mt-4 space-y-6">
+                  <div x-show="quizAnalyticsDetail.quiz?.quiz_key" class="space-y-6">
+                    <div class="py-3">
+                      <div class="flex flex-wrap gap-2">
+                        <template x-for="option in quizAnalyticsWindowOptions()" :key="option.key">
+                          <button
+                            type="button"
+                            @click="changeQuizAnalyticsWindow(option.key)"
+                            :class="currentQuizAnalyticsWindow() === option.key ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700'"
+                            class="rounded-full border px-3 py-1.5 text-xs font-semibold transition"
+                            x-text="option.label"
+                          ></button>
+                        </template>
+                      </div>
+
+                      <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                        <input
+                          x-model="filters.quizAnalytics.start_date"
+                          @change="applyQuizAnalyticsCustomDateRangeIfReady()"
+                          type="date"
+                          class="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none transition focus:border-blue-300"
+                          aria-label="分析开始日期"
+                        />
+                        <input
+                          x-model="filters.quizAnalytics.end_date"
+                          @change="applyQuizAnalyticsCustomDateRangeIfReady()"
+                          type="date"
+                          class="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none transition focus:border-blue-300"
+                          aria-label="分析结束日期"
+                        />
+                      </div>
+                      <select
+                        x-show="shouldShowQuizAnalyticsVersionSelect()"
+                        :value="String(quizAnalyticsDetail.filters?.version_id || '')"
+                        @change="changeQuizAnalyticsVersionId($event.target.value)"
+                        class="mt-4 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-emerald-300"
+                        aria-label="选择分析版本"
+                      >
+                        <template x-for="version in quizAnalyticsAvailableVersions()" :key="version.id">
+                          <option :value="String(version.id)" x-text="'版本 ' + (version.version_no || '-')"></option>
+                        </template>
+                      </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-3 border-b border-slate-200 py-3">
+                      <template x-for="card in quizAnalyticsSummaryCards()" :key="card.key">
+                        <article class="py-1">
+                          <div class="text-[11px] font-semibold text-slate-500" x-text="card.label"></div>
+                          <div class="mt-1 text-2xl font-semibold tracking-[-0.04em] text-slate-900 tabular-nums" x-text="card.value"></div>
+                        </article>
+                      </template>
+                    </div>
+
+                    <div x-show="quizAnalyticsHasScoredResults()" class="space-y-3">
+                      <div>
+                        <h3 class="text-base font-semibold text-slate-900">得分分布</h3>
+                        <p class="mt-1 text-xs leading-5 text-slate-500">点击分数段筛选答题记录。</p>
+                      </div>
+                      <template x-for="group in quizAnalyticsDistributionGroups()" :key="group.score_max_label">
+                        <article class="border-t border-slate-200 pt-3">
+                          <div class="flex items-center justify-between gap-3">
+                            <div class="text-sm font-semibold text-slate-900" x-text="group.score_max_label"></div>
+                            <div class="text-[11px] font-medium tabular-nums text-slate-500" x-text="(group.total_count || 0) + ' 份'" ></div>
                           </div>
-                          <div class="mt-2 break-all font-mono text-[11px] leading-5 text-slate-500" x-text="version.git_commit || '-'"></div>
+                          <div class="overflow-x-auto py-3">
+                            <div :class="quizAnalyticsDistributionColumnsClass()">
+                              <template x-for="row in quizAnalyticsDistributionRows(group)" :key="row.key">
+                                <button
+                                  type="button"
+                                  x-show="row.kind === 'bucket'"
+                                  @click="toggleQuizAnalyticsScoreFilter(group, row)"
+                                  :class="quizAnalyticsDistributionColumnButtonClass(group, row)"
+                                >
+                                  <div class="text-[11px] font-semibold tabular-nums text-slate-700" x-text="row.count || 0"></div>
+                                  <div :class="quizAnalyticsDistributionColumnTrackClass(group, row)">
+                                    <div class="w-full rounded-lg bg-linear-to-t from-blue-500 via-sky-500 to-emerald-500" :style="quizAnalyticsDistributionColumnStyle(group, row)"></div>
+                                  </div>
+                                  <div class="text-center text-[11px] font-mono leading-4 text-slate-500" x-text="row.label"></div>
+                                </button>
+                              </template>
+                            </div>
+                          </div>
+                        </article>
+                      </template>
+                    </div>
+
+                    <div x-show="!quizAnalyticsHasScoredResults()" class="border-t border-dashed border-slate-200 py-5 text-center">
+                      <div class="text-sm font-semibold text-slate-700">暂无可计分完成记录</div>
+                      <p class="mt-1 text-xs leading-5 text-slate-500">量表答卷仍会展示在下方结果与答题记录中。</p>
+                    </div>
+
+                    <div x-show="quizAnalyticsHasTraitDistribution()" class="space-y-3">
+                      <div>
+                        <h3 class="text-base font-semibold text-slate-900">量表结果分布</h3>
+                        <p class="mt-1 text-xs leading-5 text-slate-500">
+                          样本 <span class="tabular-nums" x-text="quizAnalyticsTraitDistribution().total_count || 0"></span>
+                          · <span class="tabular-nums" x-text="quizAnalyticsTraitDistribution().appeared_combination_count || 0"></span> 种组合
+                        </p>
+                      </div>
+                      <div class="divide-y divide-violet-100 border-b border-t border-violet-100 py-1">
+                        <template x-for="row in quizAnalyticsTraitCombinationRows()" :key="row.combination">
+                          <button
+                            type="button"
+                            @click="toggleQuizAnalyticsTraitCombinationFilter(row)"
+                            :class="quizAnalyticsTraitCombinationIsActive(row) ? 'bg-white' : 'hover:bg-white/70'"
+                            class="grid w-full grid-cols-[minmax(0,1fr)_3rem] items-center gap-3 rounded-lg py-3 text-left transition"
+                          >
+                            <div class="min-w-0">
+                              <div class="flex items-center justify-between gap-3">
+                                <span class="font-mono text-sm font-semibold text-slate-900" x-text="row.combination"></span>
+                                <span class="text-xs font-semibold tabular-nums text-slate-600" x-text="quizAnalyticsPercentLabel(row.percent)"></span>
+                              </div>
+                              <div class="mt-2 h-2 overflow-hidden rounded-full bg-white">
+                                <div class="h-full rounded-full bg-violet-500" :style="quizAnalyticsTraitCombinationBarStyle(row)"></div>
+                              </div>
+                            </div>
+                            <span class="text-right text-sm font-semibold tabular-nums text-slate-700" x-text="row.count || 0"></span>
+                          </button>
+                        </template>
+                      </div>
+                    </div>
+
+                    <div class="space-y-3">
+                      <div class="flex flex-col gap-2">
+                        <div>
+                          <h3 class="text-base font-semibold text-slate-900">答题记录</h3>
+                          <p class="mt-1 text-xs leading-5 text-slate-500">进行中和已完成的答题均在此展示。</p>
                         </div>
-                        <span class="material-symbols-rounded text-slate-400" x-text="version.is_selected ? 'visibility' : 'chevron_right'"></span>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <template x-for="option in quizAnalyticsListSortOptions()" :key="option.key">
+                            <button type="button" @click="changeQuizAnalyticsListSort(option.key)" :class="quizAnalyticsListSortButtonClass(option.key)">
+                              <span x-text="option.label"></span>
+                              <span class="ml-1" x-text="quizAnalyticsListSortDirectionLabel(option.key)"></span>
+                            </button>
+                          </template>
+                        </div>
+                        <div x-show="quizAnalyticsHasActiveScoreFilter() || quizAnalyticsHasActiveTraitFilter()" class="flex flex-wrap items-center gap-2">
+                          <button x-show="quizAnalyticsHasActiveScoreFilter()" type="button" @click="clearQuizAnalyticsScoreFilter()" class="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700" x-text="quizAnalyticsScoreFilterLabel()"></button>
+                          <button x-show="quizAnalyticsHasActiveTraitFilter()" type="button" @click="clearQuizAnalyticsTraitFilter()" class="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700" x-text="quizAnalyticsTraitFilterLabel()"></button>
+                        </div>
                       </div>
 
-                      <div class="mt-3 space-y-2 text-xs leading-5 text-slate-500">
-                        <div x-show="version.source_path" class="break-all">
-                          <span class="font-semibold text-slate-600">文件：</span>
-                          <span x-text="version.source_path"></span>
-                        </div>
-                        <div x-show="version.created_at">
-                          <span class="font-semibold text-slate-600">创建时间：</span>
-                          <span x-text="formatDateTime(version.created_at)"></span>
+                      <div class="divide-y divide-slate-200 border-b border-t border-slate-200">
+                        <template x-for="item in quizAnalyticsVisibleItems()" :key="item.attempt_id">
+                          <article class="px-3 py-3">
+                            <div class="flex items-start justify-between gap-3">
+                              <div class="min-w-0">
+                                <div class="truncate font-semibold text-slate-900" :title="item.candidate_name" x-text="item.candidate_name"></div>
+                                <div class="mt-1 truncate font-mono text-[11px] text-slate-400" :title="item.token" x-text="item.token"></div>
+                              </div>
+                              <button type="button" @click="go(item.detail_url)" class="shrink-0 rounded-lg border border-blue-100 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">详情</button>
+                            </div>
+                            <div class="mt-3 flex flex-wrap items-center gap-1.5">
+                              <span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600" x-text="quizAnalyticsVersionLabel(item)"></span>
+                              <span :class="quizAnalyticsStatusBadgeClass(item)" x-text="item.status_label"></span>
+                              <span :class="quizAnalyticsSourceBadgeClass(item)" x-text="item.source_label"></span>
+                              <span :class="quizAnalyticsResultBadgeClass(item)" x-text="quizAnalyticsResultDisplay(item)"></span>
+                            </div>
+                            <div class="mt-2 text-[11px] leading-5 text-slate-500">
+                              <span x-text="'开始 ' + (item.entered_at_display || '-')"></span>
+                              <span class="mx-1 text-slate-300">·</span>
+                              <span x-text="'完成 ' + (item.finished_at_display || '-')"></span>
+                            </div>
+                          </article>
+                        </template>
+                        <div x-show="!quizAnalyticsVisibleItemsCount()" class="px-4 py-7 text-center">
+                          <div class="text-sm font-semibold text-slate-700" x-text="quizAnalyticsListEmptyTitle()"></div>
+                          <p class="mt-1 text-xs leading-5 text-slate-500" x-text="quizAnalyticsListEmptyDescription()"></p>
                         </div>
                       </div>
-                    </button>
-                  </template>
-                </div>
+                    </div>
+                  </div>
 
-                <div x-show="!(quizDetail.quiz_version_history || []).length" class="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-500">
-                  暂无版本历史
-                </div>
+                  <div x-show="!quizAnalyticsDetail.quiz?.quiz_key" class="border-b border-t border-dashed border-slate-200 px-4 py-10 text-center">
+                    <div class="text-sm font-semibold text-slate-700">分析数据加载中</div>
+                    <p class="mt-1 text-xs leading-5 text-slate-500">正在准备当前测验的答题统计。</p>
+                  </div>
+                </section>
+
+                <section x-show="quizDetailPanelVisible('history')" x-cloak class="mt-4">
+                  <div class="divide-y divide-slate-200 border-b border-t border-slate-200">
+                    <template x-for="version in quizDetail.quiz_version_history || []" :key="version.id">
+                      <button
+                        type="button"
+                        @click="loadQuizVersion(version.id)"
+                        :class="version.is_selected ? 'bg-blue-50/70' : 'hover:bg-blue-50/40'"
+                        class="w-full px-4 py-4 text-left transition"
+                      >
+                        <div class="flex items-start justify-between gap-3">
+                          <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <div class="font-semibold text-slate-900">版本 <span x-text="version.version_no || version.id"></span></div>
+                              <span x-show="version.is_current" class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">当前</span>
+                              <span x-show="version.is_selected && !version.is_current" class="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700">已选</span>
+                            </div>
+                            <div class="mt-2 break-all font-mono text-[11px] leading-5 text-slate-500" x-text="version.git_commit || '-'"></div>
+                          </div>
+                          <span class="material-symbols-rounded text-slate-400" x-text="version.is_selected ? 'visibility' : 'chevron_right'"></span>
+                        </div>
+
+                        <div class="mt-3 space-y-2 text-xs leading-5 text-slate-500">
+                          <div x-show="version.source_path" class="break-all">
+                            <span class="font-semibold text-slate-600">文件：</span>
+                            <span x-text="version.source_path"></span>
+                          </div>
+                          <div x-show="version.created_at">
+                            <span class="font-semibold text-slate-600">创建时间：</span>
+                            <span x-text="formatDateTime(version.created_at)"></span>
+                          </div>
+                        </div>
+                      </button>
+                    </template>
+                  </div>
+
+                  <div x-show="!(quizDetail.quiz_version_history || []).length" class="border-b border-t border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                    暂无版本历史
+                  </div>
+                </section>
               </div>
             </section>
           </div>

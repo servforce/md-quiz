@@ -152,7 +152,7 @@
 
 ### `GET /api/admin/candidates`
 
-返回候选人列表、最近答题简报与筛选条件。列表项会包含 `default_quiz_key` 与 `default_quiz_keys`，用于创建邀约时按候选人默认带出试题。
+返回候选人列表、最近答题简报与筛选条件。支持 `q`、`created_from`、`created_to` 和 `page` 查询参数，其中日期使用 `YYYY-MM-DD`；省略日期参数时默认查询全部时间范围。列表按候选人创建时间倒序排列，同一时间以候选人 ID 倒序稳定排序。列表项会包含 `default_quiz_key` 与 `default_quiz_keys`，用于创建邀约时按候选人默认带出试题。
 
 ### `POST /api/admin/candidates`
 
@@ -239,7 +239,7 @@
 - `end_to`
 - `page`
 
-列表项会返回邀约访问地址 `url` 与二维码地址 `qr_url`。
+列表项会返回邀约访问地址 `url`、二维码地址 `qr_url`，以及人工标记的主观题字段 `suspected_ai_question_ids`、`suspected_ai_question_count`。
 
 ### `POST /api/admin/assignments`
 
@@ -259,6 +259,16 @@
 - `stem_html`
 - `rubric_html`
 - `options[].text_html`
+
+### `POST /api/admin/assignments/{token}/suspected-ai-question`
+
+为当前答题的一道主观题设置或取消“疑似 AI”人工标记。请求体：
+
+```json
+{ "qid": "Q3", "suspected": true }
+```
+
+仅接受当前答题回放中的 `short` 类型题目；响应中的 `item` 会返回更新后的 `suspected_ai_question_ids` 与 `suspected_ai_question_count`。
 
 ### `GET /api/admin/assignments/{token}/qr.png`
 

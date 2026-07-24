@@ -602,6 +602,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
     finished_at TIMESTAMPTZ NULL,
     handled_at TIMESTAMPTZ NULL,
     handled_by TEXT NULL,
+    suspected_ai_question_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     score INT NULL CHECK (score IS NULL OR score BETWEEN 0 AND 100),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -641,6 +642,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS source_kind TEXT NOT NULL DEFAULT 'direct';
  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS handled_at TIMESTAMPTZ NULL;
  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS handled_by TEXT NULL;
+ ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS suspected_ai_question_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
 
   CREATE TABLE IF NOT EXISTS assignment_record (
     token TEXT PRIMARY KEY,
@@ -1017,7 +1019,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
         ) from e
 
 
-# 从 PostgreSQL 的 candidate 表里查询候选人（考生）列表，倒序排列
+# 从 PostgreSQL 的 candidate 表里查询候选人（考生）列表，按创建时间倒序排列
 def list_candidates(
     limit: int | None = None,
     offset: int = 0,
@@ -1058,7 +1060,7 @@ WITH filtered_candidates AS (
             sql += " WHERE created_at <= %s"
         params.append(created_to)
 
-    sql += "\nORDER BY id DESC\n"   # 按照id倒序输出
+    sql += "\nORDER BY created_at DESC, id DESC\n"
     # 将限制的limit的数量传到数据库中
     if limit is not None:
         sql += " LIMIT %s"
@@ -3355,6 +3357,7 @@ def get_quiz_paper_by_token(token: str) -> dict[str, Any] | None:
     finished_at,
     handled_at,
     handled_by,
+    suspected_ai_question_ids,
     score,
     created_at,
     updated_at
@@ -3396,6 +3399,7 @@ def get_quiz_paper_admin_detail_by_token(token: str) -> dict[str, Any] | None:
     ep.finished_at,
     ep.handled_at,
     ep.handled_by,
+    ep.suspected_ai_question_ids,
     ep.score,
     ep.created_at
  FROM quiz_paper ep
@@ -3429,6 +3433,32 @@ def set_quiz_paper_handling(token: str, *, handled: bool, handled_by: str = "") 
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (bool(handled), bool(handled), str(handled_by or "").strip(), str(token or "")))
+
+
+def set_quiz_paper_suspected_ai_question_ids(token: str, question_ids: list[str]) -> None:
+    normalized_ids: list[str] = []
+    seen: set[str] = set()
+    for value in question_ids:
+        qid = str(value or "").strip()
+        if not qid or qid in seen:
+            continue
+        seen.add(qid)
+        normalized_ids.append(qid)
+    sql = """
+ UPDATE quiz_paper
+ SET suspected_ai_question_ids=%s::jsonb,
+     updated_at=NOW()
+ WHERE token=%s
+ """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    psycopg2.extras.Json(normalized_ids, dumps=lambda value: json.dumps(value, ensure_ascii=False)),
+                    str(token or "").strip(),
+                ),
+            )
 
 
 def set_quiz_paper_entered_at(token: str, entered_at) -> None:
@@ -3616,6 +3646,7 @@ def list_quiz_papers(
      ep.finished_at,
      ep.handled_at,
      ep.handled_by,
+     ep.suspected_ai_question_ids,
      ep.score,
      ep.created_at
   FROM quiz_paper ep
@@ -4688,6 +4719,25 @@ def count_unhandled_finished_quiz_papers(
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
             return int(cur.fetchone()[0])
+
+
+def count_quiz_respondents_by_key() -> dict[str, int]:
+    """按测验聚合已实际开始或已完成答题的去重候选人数。"""
+    sql = """
+SELECT quiz_key, COUNT(DISTINCT candidate_id)::int AS respondent_count
+FROM quiz_paper
+WHERE entered_at IS NOT NULL OR finished_at IS NOT NULL
+GROUP BY quiz_key
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    return {
+        str(row.get("quiz_key") or "").strip(): int(row.get("respondent_count") or 0)
+        for row in rows or []
+        if str(row.get("quiz_key") or "").strip()
+    }
 
 
 def _quiz_analytics_where_clause(

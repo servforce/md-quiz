@@ -7,11 +7,29 @@ from . import admin as shared
 router = APIRouter()
 
 
+def _normalize_quiz_list_sort(sort_by: str, sort_order: str) -> tuple[str, bool]:
+    field = str(sort_by or "").strip().lower()
+    if field not in {"updated_at", "respondent_count"}:
+        field = "updated_at"
+    descending = str(sort_order or "").strip().lower() != "asc"
+    return field, descending
+
+
 @router.get("/quizzes")
 @router.get("/exams")
-def list_exams(request: Request, q: str = "", page: int = 1):
+def list_exams(
+    request: Request,
+    q: str = "",
+    page: int = 1,
+    sort_by: str = "updated_at",
+    sort_order: str = "desc",
+):
     shared._require_admin(request)
     exams = shared.exam_helpers._list_exams()
+    respondent_counts = shared.deps.count_quiz_respondents_by_key()
+    for exam in exams:
+        quiz_key = str(exam.get("quiz_key") or "").strip()
+        exam["respondent_count"] = int(respondent_counts.get(quiz_key) or 0)
     query = str(q or "").strip().lower()
     if query:
         exams = [
@@ -22,7 +40,12 @@ def list_exams(request: Request, q: str = "", page: int = 1):
             or query in str(item.get("id") or "")
             or any(query in str(tag or "").lower() for tag in (item.get("tags") or []))
         ]
-    exams.sort(key=lambda item: float(item.get("_mtime") or 0), reverse=True)
+    sort_field, descending = _normalize_quiz_list_sort(sort_by, sort_order)
+    exams.sort(key=lambda item: str(item.get("quiz_key") or "").lower())
+    if sort_field == "respondent_count":
+        exams.sort(key=lambda item: int(item.get("respondent_count") or 0), reverse=descending)
+    else:
+        exams.sort(key=lambda item: float(item.get("_mtime") or 0), reverse=descending)
     per_page = 20
     total = len(exams)
     total_pages = max(1, (total + per_page - 1) // per_page)
@@ -37,6 +60,11 @@ def list_exams(request: Request, q: str = "", page: int = 1):
         "total_pages": total_pages,
         "repo_binding": shared._serialize_repo_binding(shared.deps.read_exam_repo_binding()),
         "sync_state": shared.deps.read_exam_repo_sync_state(),
+        "filters": {
+            "q": str(q or "").strip(),
+            "sort_by": sort_field,
+            "sort_order": "desc" if descending else "asc",
+        },
     }
 
 

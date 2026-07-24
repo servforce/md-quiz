@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Docs Bootstrap"
+  short_description: "Create lean docs from repo evidence."
+  default_prompt: "Use $project-docs-bootstrap to generate AGENTS.md, README.md, and docs/ from this repository."

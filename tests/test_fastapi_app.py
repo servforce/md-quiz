@@ -1456,6 +1456,88 @@ def test_admin_quiz_endpoints_expose_metadata_and_match_tags_query(monkeypatch, 
     assert selected_version["spec"]["questions"][0]["options"][0]["text_html"].startswith("<p>")
 
 
+def test_admin_quiz_list_sorts_by_update_time_or_respondent_count_and_excludes_unstarted_invites(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    quiz_keys = ["quiz-list-old", "quiz-list-middle", "quiz-list-new"]
+    for quiz_key in quiz_keys:
+        _seed_exam_with_metadata(quiz_key)
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE quiz_definition SET last_sync_at=%s WHERE quiz_key=%s",
+                (datetime(2026, 1, 1, tzinfo=timezone.utc), "quiz-list-old"),
+            )
+            cur.execute(
+                "UPDATE quiz_definition SET last_sync_at=%s WHERE quiz_key=%s",
+                (datetime(2026, 1, 2, tzinfo=timezone.utc), "quiz-list-middle"),
+            )
+            cur.execute(
+                "UPDATE quiz_definition SET last_sync_at=%s WHERE quiz_key=%s",
+                (datetime(2026, 1, 3, tzinfo=timezone.utc), "quiz-list-new"),
+            )
+
+    first_candidate_id = create_candidate("重复答题候选人", "13900001000")
+    for index in range(2):
+        token = f"quiz-list-answer-{index}"
+        create_quiz_paper(
+            candidate_id=first_candidate_id,
+            phone="13900001000",
+            quiz_key="quiz-list-old",
+            token=token,
+            status="in_quiz",
+        )
+        set_quiz_paper_entered_at(token, datetime.now(timezone.utc))
+
+    second_candidate_id = create_candidate("另一位答题候选人", "13900001001")
+    create_quiz_paper(
+        candidate_id=second_candidate_id,
+        phone="13900001001",
+        quiz_key="quiz-list-old",
+        token="quiz-list-answer-second-candidate",
+        status="in_quiz",
+    )
+    set_quiz_paper_entered_at("quiz-list-answer-second-candidate", datetime.now(timezone.utc))
+
+    unstarted_candidate_id = create_candidate("未开始候选人", "13900001009")
+    create_quiz_paper(
+        candidate_id=unstarted_candidate_id,
+        phone="13900001009",
+        quiz_key="quiz-list-middle",
+        token="quiz-list-unstarted",
+        status="invited",
+    )
+
+    _admin_login(client)
+
+    by_time = client.get("/api/admin/quizzes?sort_by=updated_at&sort_order=asc")
+    by_time_desc = client.get("/api/admin/quizzes?sort_by=updated_at&sort_order=desc")
+    by_respondent_count = client.get("/api/admin/quizzes?sort_by=respondent_count&sort_order=desc")
+    by_respondent_count_asc = client.get("/api/admin/quizzes?sort_by=respondent_count&sort_order=asc")
+
+    assert by_time.status_code == 200
+    time_items = by_time.json()["items"]
+    assert [item["quiz_key"] for item in time_items] == quiz_keys
+    assert [item["updated_at"][:10] for item in time_items] == ["2026-01-01", "2026-01-02", "2026-01-03"]
+    assert by_time.json()["filters"] == {"q": "", "sort_by": "updated_at", "sort_order": "asc"}
+    assert by_time_desc.status_code == 200
+    assert [item["quiz_key"] for item in by_time_desc.json()["items"]] == list(reversed(quiz_keys))
+
+    assert by_respondent_count.status_code == 200
+    respondent_items = by_respondent_count.json()["items"]
+    assert [item["quiz_key"] for item in respondent_items] == ["quiz-list-old", "quiz-list-middle", "quiz-list-new"]
+    assert {item["quiz_key"]: item["respondent_count"] for item in respondent_items} == {
+        "quiz-list-old": 2,
+        "quiz-list-middle": 0,
+        "quiz-list-new": 0,
+    }
+    assert by_respondent_count_asc.status_code == 200
+    assert [item["quiz_key"] for item in by_respondent_count_asc.json()["items"]] == [
+        "quiz-list-middle",
+        "quiz-list-new",
+        "quiz-list-old",
+    ]
+
+
 def test_admin_quiz_estimated_duration_prefers_answer_time_total(monkeypatch, tmp_path):
     client = _build_client(monkeypatch, tmp_path)
     version_id = _seed_exam_with_answer_time("answer-time-demo")
@@ -2435,6 +2517,7 @@ def test_admin_quiz_analytics_detail_supports_window_scope_distribution_and_trai
     selected_v1_payload = selected_v1_response.json()
     custom_payload = custom_response.json()
 
+    assert all_payload["quiz"]["url"].endswith("/admin/quizzes/quiz-analytics-demo")
     assert all_payload["filters"]["window"] == "month"
     assert all_payload["filters"]["version_scope"] == "all"
     assert all_payload["summary"]["total_attempt_count"] == 5
@@ -2881,6 +2964,40 @@ def test_admin_candidates_list_exposes_attempt_summary_and_uses_page_offset(monk
     assert len(page_1["items"]) == 20
     assert len(page_2["items"]) == 2
     assert {item["id"] for item in page_1["items"]}.isdisjoint({item["id"] for item in page_2["items"]})
+
+
+def test_admin_candidates_list_defaults_to_all_time_and_orders_by_created_at_desc(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    oldest_id = create_candidate("时间筛选候选人最早", "13900000401")
+    middle_id = create_candidate("时间筛选候选人中间", "13900000402")
+    newest_id = create_candidate("时间筛选候选人最新", "13900000403")
+    created_at_by_id = {
+        oldest_id: datetime(2024, 1, 15, 8, 30, tzinfo=timezone.utc),
+        middle_id: datetime(2025, 6, 20, 9, 45, tzinfo=timezone.utc),
+        newest_id: datetime(2026, 7, 22, 10, 15, tzinfo=timezone.utc),
+    }
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            for candidate_id, created_at in created_at_by_id.items():
+                cur.execute("UPDATE candidate SET created_at=%s WHERE id=%s", (created_at, candidate_id))
+
+    _admin_login(client)
+
+    default_response = client.get("/api/admin/candidates?q=时间筛选候选人")
+    assert default_response.status_code == 200
+    default_payload = default_response.json()
+    assert default_payload["filters"] == {
+        "q": "时间筛选候选人",
+        "created_from": "",
+        "created_to": "",
+    }
+    assert [item["id"] for item in default_payload["items"]] == [newest_id, middle_id, oldest_id]
+
+    filtered_response = client.get(
+        "/api/admin/candidates?q=时间筛选候选人&created_from=2025-06-20&created_to=2025-06-20"
+    )
+    assert filtered_response.status_code == 200
+    assert [item["id"] for item in filtered_response.json()["items"]] == [middle_id]
 
 
 def test_admin_candidate_detail_attempt_results_include_score_display(monkeypatch, tmp_path):
@@ -3826,6 +3943,79 @@ def test_admin_assignment_handling_summary_toggle_and_detail(monkeypatch, tmp_pa
     list_after_unhandle = client.get("/api/admin/assignments")
     assert list_after_unhandle.status_code == 200
     assert list_after_unhandle.json()["summary"]["unhandled_finished_count"] == 1
+
+
+def test_admin_assignment_suspected_ai_question_toggle_updates_detail_and_list(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    version_id = _seed_exam_with_review_content("suspected-ai-demo")
+    candidate_id = create_candidate("疑似 AI 候选人", "13900000043")
+    token = "suspectAI001"
+    now = datetime.now(timezone.utc).isoformat()
+    create_assignment_record(
+        token,
+        {
+            "token": token,
+            "quiz_key": "suspected-ai-demo",
+            "quiz_version_id": version_id,
+            "candidate_id": candidate_id,
+            "created_at": now,
+            "status": "finished",
+            "answers": {"Q1": "A", "Q3": "这是主观题作答。"},
+            "grading": {"status": "done", "total": 5, "total_max": 15},
+        },
+    )
+    create_quiz_paper(
+        candidate_id=candidate_id,
+        phone="13900000043",
+        quiz_key="suspected-ai-demo",
+        quiz_version_id=version_id,
+        token=token,
+        status="finished",
+    )
+    _admin_login(client)
+
+    detail_before = client.get(f"/api/admin/attempts/{token}")
+    assert detail_before.status_code == 200
+    assert detail_before.json()["quiz_paper"]["suspected_ai_question_ids"] == []
+    assert detail_before.json()["quiz_paper"]["suspected_ai_question_count"] == 0
+
+    def fail_if_full_attempt_detail_is_built(*args, **kwargs):
+        raise AssertionError("疑似 AI 标记不应构建完整答题回放")
+
+    monkeypatch.setattr(admin_api, "_serialize_attempt_detail", fail_if_full_attempt_detail_is_built)
+    monkeypatch.setattr(
+        admin_api.deps,
+        "get_quiz_paper_admin_detail_by_token",
+        fail_if_full_attempt_detail_is_built,
+    )
+
+    mark_response = client.post(
+        f"/api/admin/assignments/{token}/suspected-ai-question",
+        json={"qid": "Q3", "suspected": True},
+    )
+    assert mark_response.status_code == 200
+    assert mark_response.json()["item"]["suspected_ai_question_ids"] == ["Q3"]
+    assert mark_response.json()["item"]["suspected_ai_question_count"] == 1
+
+    list_response = client.get("/api/admin/assignments")
+    assert list_response.status_code == 200
+    list_item = next(item for item in list_response.json()["items"] if item["token"] == token)
+    assert list_item["suspected_ai_question_count"] == 1
+
+    invalid_response = client.post(
+        f"/api/admin/assignments/{token}/suspected-ai-question",
+        json={"qid": "Q1", "suspected": True},
+    )
+    assert invalid_response.status_code == 422
+    assert invalid_response.json()["detail"] == "只能标记当前答题中的主观题"
+
+    unmark_response = client.post(
+        f"/api/admin/assignments/{token}/suspected-ai-question",
+        json={"qid": "Q3", "suspected": False},
+    )
+    assert unmark_response.status_code == 200
+    assert unmark_response.json()["item"]["suspected_ai_question_ids"] == []
+    assert unmark_response.json()["item"]["suspected_ai_question_count"] == 0
 
 
 def test_admin_can_delete_unstarted_assignment(monkeypatch, tmp_path):

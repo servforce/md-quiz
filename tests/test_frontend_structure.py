@@ -90,6 +90,40 @@ def test_admin_assignments_module_uses_page_query_param() -> None:
     assert "target === \"quiz\" && (this.assignmentForm.quiz_key" not in source
 
 
+def test_admin_assignment_suspected_ai_controls_are_present() -> None:
+    attempt_source = (ROOT / "static" / "admin" / "pages" / "attempt-detail.html").read_text(encoding="utf-8")
+    assignments_source = (ROOT / "static" / "admin" / "pages" / "assignments.html").read_text(encoding="utf-8")
+    module_source = (ROOT / "static" / "admin" / "modules" / "pages" / "assignments.js").read_text(encoding="utf-8")
+
+    assert "疑似AI-" in attempt_source
+    assert "toggleAttemptSuspectedAi(question)" in attempt_source
+    assert "attemptQuestionIsSuspectedAi(question)" in attempt_source
+    assert "attemptDetail.quiz_paper?.suspected_ai_question_count || 0" in attempt_source
+    assert "疑似AI-" in assignments_source
+    assert "assignmentSuspectedAiQuestionCount(item)" in assignments_source
+    assert 'x-show="assignmentHasCompletedGrading(item)"' in assignments_source
+    assert "sm:flex-row sm:flex-wrap" in assignments_source
+    assert "whitespace-nowrap text-lg" in assignments_source
+    assert 'class="truncate whitespace-nowrap text-lg' not in assignments_source
+    assert "sm:flex-none sm:shrink-0" in assignments_source
+    assert "sm:ml-auto sm:shrink-0 sm:flex-nowrap" in assignments_source
+    assert "<div x-show=\"assignmentHasCompletedGrading(item)\" class=\"mt-3\">\n                        <span class=\"assignment-badge border-rose-200" in assignments_source
+    assert "/suspected-ai-question" in module_source
+    assert "attemptSuspectedAiButtonClass(question)" in module_source
+    assert "attempt-suspected-ai-toggle" in module_source
+    assert "assignmentHasCompletedGrading(item)" in module_source
+    assert 'return this.assignmentStatusValue(item) === "finished";' in module_source
+    assert "syncAttemptSuspectedAiQuestionState(updatedItem)" in module_source
+    assert "this.applyAssignmentItemUpdate(updatedItem, { updateAttemptDetail: false });" in module_source
+    assert "quizPaper.suspected_ai_question_ids = questionIds;" in module_source
+    assert "quizPaper.suspected_ai_question_count = count;" in module_source
+    sync_start = module_source.index("syncAttemptSuspectedAiQuestionState(updatedItem) {")
+    sync_end = module_source.index("    syncStatus()", sync_start)
+    assert "this.attemptDetail = {" not in module_source[sync_start:sync_end]
+    assert "const detailChanged = JSON.stringify(this.attemptDetail) !== JSON.stringify(nextDetail);" in module_source
+    assert "if (detailChanged) {\n        this.attemptDetail = nextDetail;" in module_source
+
+
 def test_admin_logs_page_supports_time_range_display() -> None:
     source = (ROOT / "static" / "admin" / "pages" / "logs.html").read_text(encoding="utf-8")
 
@@ -113,6 +147,16 @@ def test_admin_candidates_page_exposes_pagination_controls() -> None:
     assert "candidatesHavePagination" in source
     assert "candidateForm.job_description_id" in source
     assert "candidateResumeUploadForm.job_description_id" in source
+    assert 'type="date"' in source
+    assert "filters.candidates.created_from" in source
+    assert "filters.candidates.created_to" in source
+    assert 'style="flex: 1 1 420px"' in source
+    assert 'style="flex: 0 0 256px; min-width: 256px"' in source
+    assert source.count('style="min-width: 0"') == 2
+    assert "rounded-2xl border border-blue-100 bg-slate-50/70 p-2" not in source
+    assert 'aria-label="搜索姓名或手机号"' in source
+    assert 'role="group" aria-label="创建时间"' in source
+    assert 'aria-label="重置筛选"' not in source
     assert "首页" in source
     assert "上一页" in source
     assert "下一页" in source
@@ -129,6 +173,8 @@ def test_admin_candidates_module_uses_page_query_param() -> None:
     source = (ROOT / "static" / "admin" / "modules" / "pages" / "candidates.js").read_text(encoding="utf-8")
 
     assert 'query.set("page"' in source
+    assert 'query.set("created_from"' in source
+    assert 'query.set("created_to"' in source
     assert "scheduleCandidatesReloadFromFirstPage" in source
 
 
@@ -201,15 +247,51 @@ def test_admin_candidate_detail_allows_resume_evaluation_editing() -> None:
     assert "candidateResumeEvaluationForm" in state_source
 
 
-def test_admin_quiz_analytics_route_and_nav_exist() -> None:
+def test_admin_quiz_analytics_is_embedded_in_quiz_detail() -> None:
     router_source = (ROOT / "static" / "admin" / "modules" / "router.js").read_text(encoding="utf-8")
     state_source = (ROOT / "static" / "admin" / "modules" / "state.js").read_text(encoding="utf-8")
+    constants_source = (ROOT / "static" / "admin" / "modules" / "constants.js").read_text(encoding="utf-8")
+    quiz_source = (ROOT / "static" / "admin" / "modules" / "pages" / "quizzes.js").read_text(encoding="utf-8")
+    detail_source = (ROOT / "static" / "admin" / "pages" / "quiz-detail.html").read_text(encoding="utf-8")
 
-    assert '"/static/admin/pages/quiz-analytics.html"' in router_source
-    assert 'path === "/admin/quiz-analytics"' in router_source
-    assert 'name: "quiz-analytics"' in router_source
-    assert 'href: "/admin/quiz-analytics"' in state_source
-    assert 'label: "测验分析"' in state_source
+    assert '"/static/admin/pages/quiz-analytics.html"' not in router_source
+    assert 'href: "/admin/quiz-analytics"' not in state_source
+    assert 'pathname === "/admin/quiz-analytics"' in router_source
+    assert 'defaultTab: "analytics"' in constants_source
+    assert '{ id: "analytics", label: "测验分析" }' in constants_source
+    assert 'quizDetailSideTab: "analytics"' in state_source
+    assert 'this.loadQuizAnalyticsDetail(quizKey, { quiet: true, syncRoute: false })' in quiz_source
+    assert "quizDetailPanelVisible('analytics')" in detail_source
+    assert "quizDetailPanelVisible('history')" in detail_source
+
+
+def test_admin_quiz_detail_keeps_its_primary_content_panel_surface() -> None:
+    source = (ROOT / "static" / "admin" / "pages" / "quiz-detail.html").read_text(encoding="utf-8")
+
+    primary_panel = re.search(
+        r"x-show=\"adminCompactPanelVisible\('quiz-detail', 'content'\)\"\s+class=\"([^\"]+)\"",
+        source,
+    )
+
+    assert primary_panel is not None
+    classes = set(primary_panel.group(1).split())
+    assert {
+        "admin-surface",
+        "rounded-3xl",
+        "border",
+        "bg-white/82",
+        "p-5",
+        "shadow-[var(--admin-shadow)]",
+        "backdrop-blur-xl",
+    } <= classes
+
+
+def test_admin_quiz_detail_keeps_its_score_summary_card() -> None:
+    source = (ROOT / "static" / "admin" / "pages" / "quiz-detail.html").read_text(encoding="utf-8")
+
+    assert "admin-quiz-overview-card overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/70" in source
+    assert 'class="admin-quiz-summary-split"' in source
+    assert 'class="admin-quiz-summary-score px-4 py-4 md:px-5"' in source
 
 
 def test_admin_job_descriptions_route_nav_and_page_exist() -> None:
@@ -233,7 +315,17 @@ def test_admin_job_descriptions_route_nav_and_page_exist() -> None:
     assert "jobDescriptionForm.content_md" in page_source
     assert "关联试题" in page_source
     assert "jobDescriptionRelatedQuizOptions()" in page_source
-    assert "toggleJobDescriptionRelatedQuiz" in page_source
+    assert "jobDescriptionRelatedQuizItems()" in page_source
+    assert "jobDescriptionRelatedQuizSearchResults(query)" in page_source
+    assert "addJobDescriptionRelatedQuiz(quiz.quiz_key)" in page_source
+    assert "removeJobDescriptionRelatedQuiz(quiz.quiz_key)" in page_source
+    assert 'x-show="!adding"' in page_source
+    assert 'x-show="adding"' in page_source
+    assert '@keydown.escape.prevent="adding = false; query = \'\'"' in page_source
+    assert '@blur="adding = false; query = \'\'"' in page_source
+    assert "@mousedown.prevent" in page_source
+    assert "border-slate-200 bg-slate-50 text-slate-400" in page_source
+    assert 'type="checkbox"' not in page_source
     assert "admin-job-description-page" in page_source
     assert "admin-job-description-items" in page_source
     assert "admin-job-description-editor" in page_source
@@ -248,8 +340,19 @@ def test_admin_job_descriptions_route_nav_and_page_exist() -> None:
     assert ".admin-job-description-list" in css_source
     assert "position: sticky;" in css_source
     assert ".admin-job-description-items" in css_source
+    job_description_items_css = re.search(
+        r"\.admin-job-description-items\s*\{(?P<rules>.*?)\n\s*\}",
+        css_source,
+        re.DOTALL,
+    )
+    assert job_description_items_css is not None
+    assert "scrollbar-gutter" not in job_description_items_css.group("rules")
     assert "jobDescriptionContentTabs()" in module_source
     assert "normalizeJobDescriptionRelatedQuizzes" in module_source
+    assert "jobDescriptionRelatedQuizItems()" in module_source
+    assert "jobDescriptionRelatedQuizSearchResults(query = \"\")" in module_source
+    assert "addJobDescriptionRelatedQuiz(quizKey)" in module_source
+    assert "removeJobDescriptionRelatedQuiz(quizKey)" in module_source
     assert "related_quizzes" in module_source
     assert 'this.jobDescriptionContentTab = "preview"' in module_source
     assert 'label: "编辑"' in module_source

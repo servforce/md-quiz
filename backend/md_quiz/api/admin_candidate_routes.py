@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -131,8 +131,8 @@ def get_candidates(
     page: int = 1,
 ):
     shared._require_admin(request)
-    created_from_raw = str(created_from or "").strip() or (datetime.now().date() - timedelta(days=29)).isoformat()
-    created_to_raw = str(created_to or "").strip() or datetime.now().date().isoformat()
+    created_from_raw = str(created_from or "").strip()
+    created_to_raw = str(created_to or "").strip()
     parsed_from = shared._parse_candidate_query_dates(created_from_raw, end_of_day=False)
     parsed_to = shared._parse_candidate_query_dates(created_to_raw, end_of_day=True)
     per_page = 20

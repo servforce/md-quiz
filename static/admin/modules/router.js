@@ -3,7 +3,6 @@ import { clearFragmentMount, loadHtmlFragment } from "/static/assets/js/shared/r
 export const ADMIN_ROUTE_FRAGMENTS = {
   login: { fragment: "/static/admin/pages/login.html", mountRef: "loginMount" },
   quizzes: { fragment: "/static/admin/pages/quizzes.html", mountRef: "pageMount" },
-  "quiz-analytics": { fragment: "/static/admin/pages/quiz-analytics.html", mountRef: "pageMount" },
   "quiz-detail": { fragment: "/static/admin/pages/quiz-detail.html", mountRef: "pageMount" },
   candidates: { fragment: "/static/admin/pages/candidates.html", mountRef: "pageMount" },
   "job-descriptions": { fragment: "/static/admin/pages/job-descriptions.html", mountRef: "pageMount" },
@@ -92,9 +91,6 @@ export function createAdminRouterModule() {
       }
       if (path === "/admin" || path === "/admin/quizzes") {
         return withMeta({ name: "quizzes", path: "/admin/quizzes", title: "测验", section: "Quizzes", params: {} });
-      }
-      if (path === "/admin/quiz-analytics") {
-        return withMeta({ name: "quiz-analytics", path, title: "测验分析", section: "Quiz Analytics", params: {} });
       }
       let match = path.match(/^\/admin\/(?:quizzes|exams)\/([^/]+)$/);
       if (match) {
@@ -188,6 +184,18 @@ export function createAdminRouterModule() {
         return;
       }
 
+      if (pathname === "/admin/quiz-analytics") {
+        const legacyParams = new URLSearchParams(String(search || "").replace(/^\?/, ""));
+        const quizKey = String(legacyParams.get("quiz_key") || "").trim();
+        legacyParams.delete("quiz_key");
+        const legacySearch = legacyParams.toString() ? `?${legacyParams.toString()}` : "";
+        const destination = quizKey
+          ? `/admin/quizzes/${encodeURIComponent(quizKey)}`
+          : "/admin/quizzes";
+        await this.handleRoute(destination, { replace: true, search: legacySearch });
+        return;
+      }
+
       let nextRoute = this.resolveRoute(pathname, search);
       if (this.session.authenticated && nextRoute.name === "login") {
         nextRoute = this.resolveRoute("/admin/quizzes", "");
@@ -234,9 +242,6 @@ export function createAdminRouterModule() {
       switch (this.route.name) {
         case "quizzes":
           await this.loadQuizzes();
-          break;
-        case "quiz-analytics":
-          await this.loadQuizAnalyticsPage();
           break;
         case "quiz-detail":
           await this.loadQuizDetail(this.route.params.quizKey);

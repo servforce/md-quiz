@@ -5,11 +5,6 @@ const QUIZ_ANALYTICS_WINDOW_OPTIONS = [
   { key: "year", label: "年" },
 ];
 
-const QUIZ_ANALYTICS_VERSION_SCOPE_OPTIONS = [
-  { key: "all", label: "全部版本" },
-  { key: "current", label: "当前版本" },
-];
-
 const QUIZ_ANALYTICS_LIST_SORT_OPTIONS = [
   { key: "time", label: "时间" },
   { key: "score", label: "得分" },
@@ -19,10 +14,6 @@ export function createAdminQuizAnalyticsModule() {
   return {
     quizAnalyticsWindowOptions() {
       return QUIZ_ANALYTICS_WINDOW_OPTIONS;
-    },
-
-    quizAnalyticsVersionScopeOptions() {
-      return QUIZ_ANALYTICS_VERSION_SCOPE_OPTIONS;
     },
 
     currentQuizAnalyticsWindow() {
@@ -38,7 +29,7 @@ export function createAdminQuizAnalyticsModule() {
     },
 
     currentQuizAnalyticsVersionScope() {
-      return String(this.route?.query?.version_scope || "all").trim() || "all";
+      return "current";
     },
 
     currentQuizAnalyticsVersionId() {
@@ -97,7 +88,7 @@ export function createAdminQuizAnalyticsModule() {
     },
 
     shouldShowQuizAnalyticsVersionSelect() {
-      return this.currentQuizAnalyticsVersionScope() === "current" && this.quizAnalyticsAvailableVersions().length > 0;
+      return this.quizAnalyticsAvailableVersions().length > 0;
     },
 
     quizAnalyticsSelectedTitle() {
@@ -125,15 +116,6 @@ export function createAdminQuizAnalyticsModule() {
         { key: "scored", label: "可计分完成", value: Number(summary.scored_finished_count || 0), tone: "blue" },
         { key: "traits", label: "量表完成", value: Number(summary.traits_only_finished_count || 0), tone: "violet" },
       ];
-    },
-
-    quizAnalyticsCardClass(tone) {
-      const key = String(tone || "slate").trim();
-      if (key === "emerald") return "border-emerald-100 bg-emerald-50/75";
-      if (key === "amber") return "border-amber-100 bg-amber-50/75";
-      if (key === "blue") return "border-blue-100 bg-blue-50/75";
-      if (key === "violet") return "border-violet-100 bg-violet-50/75";
-      return "border-slate-200 bg-slate-50/85";
     },
 
     quizAnalyticsVersionLabel(item) {
@@ -469,12 +451,15 @@ export function createAdminQuizAnalyticsModule() {
       const normalizedEndDate = endDate ?? this.currentQuizAnalyticsEndDate();
       const activeScoreFilter = scoreFilter === null ? null : (scoreFilter || this.currentQuizAnalyticsScoreFilter());
       const normalizedTraitFilterCombination = traitFilterCombination ?? this.currentQuizAnalyticsTraitFilterCombination();
+      const detailQuizKey = this.route?.name === "quiz-detail"
+        ? String(this.route?.params?.quizKey || "").trim()
+        : "";
       this.setRouteSearchParams({
-        quiz_key: String(quizKey || "").trim(),
+        quiz_key: detailQuizKey === String(quizKey || "").trim() ? "" : String(quizKey || "").trim(),
         window: String(window || this.currentQuizAnalyticsWindow()).trim() || "month",
         start_date: String(normalizedStartDate || "").trim(),
         end_date: String(normalizedEndDate || "").trim(),
-        version_scope: String(versionScope || this.currentQuizAnalyticsVersionScope()).trim() || "all",
+        version_scope: "current",
         version_id: String(normalizedVersionId || "").trim(),
         distribution_mode: String(distributionMode || this.currentQuizAnalyticsDistributionMode()).trim() || "range",
         list_sort: String(listSort || this.currentQuizAnalyticsListSortKey()).trim() || "time",
@@ -484,18 +469,6 @@ export function createAdminQuizAnalyticsModule() {
         score_filter_end: activeScoreFilter ? String(activeScoreFilter.end) : "",
         trait_filter_combination: String(normalizedTraitFilterCombination || "").trim(),
       });
-    },
-
-    async loadQuizAnalyticsList({ quiet = false, page = null } = {}) {
-      const query = new URLSearchParams();
-      const keyword = String(this.filters?.quizAnalytics?.q || "").trim();
-      const currentPage = Math.max(1, Number(page || this.quizAnalytics?.page || 1));
-      if (keyword) query.set("q", keyword);
-      query.set("page", String(currentPage));
-      const data = await this.api(`/api/admin/quiz-analytics?${query.toString()}`, { quiet });
-      if (!data) return null;
-      this.quizAnalytics = data;
-      return data;
     },
 
     async loadQuizAnalyticsDetail(quizKey, { quiet = false, syncRoute = true } = {}) {
@@ -542,32 +515,7 @@ export function createAdminQuizAnalyticsModule() {
         String(data?.filters?.start_date || ""),
         String(data?.filters?.end_date || ""),
       );
-      if (this.route.name === "quiz-analytics" && this.isAdminCompactLayout) {
-        await this.setAdminCompactTab("quiz-analytics", "detail", { scroll: true });
-      }
       return data;
-    },
-
-    async loadQuizAnalyticsPage() {
-      await this.loadQuizAnalyticsList({ quiet: true });
-      const items = Array.isArray(this.quizAnalytics?.items) ? this.quizAnalytics.items : [];
-      const requestedKey = this.currentQuizAnalyticsKey();
-      const selected =
-        items.find((item) => String(item?.quiz_key || "").trim() === requestedKey)
-        || items[0]
-        || null;
-      if (!selected) {
-        this.resetQuizAnalyticsDetail();
-        return;
-      }
-      this.syncQuizAnalyticsDateInputs();
-      await this.loadQuizAnalyticsDetail(String(selected.quiz_key || "").trim(), { quiet: true });
-    },
-
-    async selectQuizAnalyticsItem(item) {
-      const quizKey = String(item?.quiz_key || "").trim();
-      if (!quizKey) return;
-      await this.loadQuizAnalyticsDetail(quizKey);
     },
 
     async changeQuizAnalyticsWindow(window) {
@@ -587,27 +535,6 @@ export function createAdminQuizAnalyticsModule() {
         scoreFilter: this.currentQuizAnalyticsScoreFilter(),
       });
       this.syncQuizAnalyticsDateInputs("", "");
-      await this.loadQuizAnalyticsDetail(quizKey);
-    },
-
-    async changeQuizAnalyticsVersionScope(scope) {
-      const next = String(scope || "").trim();
-      if (!next || next === this.currentQuizAnalyticsVersionScope()) return;
-      const quizKey = this.currentQuizAnalyticsKey() || this.quizAnalyticsDetail?.quiz?.quiz_key || "";
-      this.syncQuizAnalyticsRoute({
-        quizKey,
-        window: this.currentQuizAnalyticsWindow(),
-        startDate: this.currentQuizAnalyticsStartDate(),
-        endDate: this.currentQuizAnalyticsEndDate(),
-        versionScope: next,
-        versionId: next === "current"
-          ? String(this.quizAnalyticsDetail?.filters?.version_id || this.quizAnalyticsDetail?.quiz?.current_version_id || "")
-          : "",
-        distributionMode: this.currentQuizAnalyticsDistributionMode(),
-        listSort: this.currentQuizAnalyticsListSortKey(),
-        listOrder: this.currentQuizAnalyticsListSortOrder(),
-        scoreFilter: this.currentQuizAnalyticsScoreFilter(),
-      });
       await this.loadQuizAnalyticsDetail(quizKey);
     },
 
@@ -757,45 +684,12 @@ export function createAdminQuizAnalyticsModule() {
       await this.loadQuizAnalyticsDetail(quizKey);
     },
 
-    scheduleQuizAnalyticsReloadFromFirstPage() {
-      window.clearTimeout(this.quizAnalyticsFilterTimer);
-      this.quizAnalyticsFilterTimer = window.setTimeout(() => {
-        this.changeQuizAnalyticsPage(1);
-      }, 220);
+    async applyQuizAnalyticsCustomDateRangeIfReady() {
+      const startDate = String(this.filters?.quizAnalytics?.start_date || "").trim();
+      const endDate = String(this.filters?.quizAnalytics?.end_date || "").trim();
+      if (!startDate || !endDate) return;
+      await this.applyQuizAnalyticsCustomDateRange();
     },
 
-    async changeQuizAnalyticsPage(page) {
-      const nextPage = Math.max(1, Number(page || 1));
-      await this.loadQuizAnalyticsList({ page: nextPage });
-      const items = Array.isArray(this.quizAnalytics?.items) ? this.quizAnalytics.items : [];
-      const currentKey = this.currentQuizAnalyticsKey();
-      const hasCurrent = items.some((item) => String(item?.quiz_key || "").trim() === currentKey);
-      const nextItem = (hasCurrent && currentKey)
-        ? items.find((item) => String(item?.quiz_key || "").trim() === currentKey)
-        : items[0];
-      if (nextItem) {
-        await this.loadQuizAnalyticsDetail(String(nextItem.quiz_key || "").trim());
-      } else {
-        this.resetQuizAnalyticsDetail();
-      }
-    },
-
-    quizAnalyticsHasPagination() {
-      return Number(this.quizAnalytics?.total_pages || 1) > 1;
-    },
-
-    canGoToPreviousQuizAnalyticsPage() {
-      return Number(this.quizAnalytics?.page || 1) > 1;
-    },
-
-    canGoToNextQuizAnalyticsPage() {
-      return Number(this.quizAnalytics?.page || 1) < Number(this.quizAnalytics?.total_pages || 1);
-    },
-
-    quizAnalyticsPaginationButtonClass(disabled) {
-      return disabled
-        ? "rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-xs font-medium text-slate-300"
-        : "rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700";
-    },
   };
 }

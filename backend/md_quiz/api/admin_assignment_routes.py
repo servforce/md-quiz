@@ -11,6 +11,32 @@ from . import admin as shared
 router = APIRouter()
 
 
+def _is_subjective_question(quiz_paper: dict[str, Any], qid: str) -> bool:
+    """仅从该次答题绑定的题库快照校验简答题，避免构建完整答题回放。"""
+    try:
+        version_id = int(quiz_paper.get("quiz_version_id") or 0)
+    except (TypeError, ValueError):
+        version_id = 0
+    snapshot = shared.deps.get_quiz_version(version_id) if version_id > 0 else None
+    if not isinstance(snapshot, dict) or not snapshot:
+        quiz_key = str(quiz_paper.get("quiz_key") or "").strip()
+        snapshot = shared.deps.get_quiz_definition(quiz_key) if quiz_key else None
+    if not isinstance(snapshot, dict):
+        return False
+
+    for section in ("spec", "public_spec"):
+        questions = snapshot.get(section) or {}
+        if not isinstance(questions, dict):
+            continue
+        for question in questions.get("questions") or []:
+            if not isinstance(question, dict):
+                continue
+            if str(question.get("qid") or "").strip() != qid:
+                continue
+            return str(question.get("type") or "").strip().lower() == "short"
+    return False
+
+
 def _normalize_assignment_quiz_keys(payload: shared.AssignmentCreatePayload, candidate_id: int) -> list[str]:
     raw_keys: list[str] = []
     if isinstance(payload.quiz_keys, list):
@@ -317,6 +343,49 @@ def set_assignment_handling(token: str, payload: shared.AssignmentHandlingPayloa
         raise shared.HTTPException(status_code=404, detail="答题记录不存在")
     return {
         "item": shared._serialize_assignment_row(row, request=request),
+    }
+
+
+@router.post("/assignments/{token}/suspected-ai-question")
+def set_assignment_suspected_ai_question(
+    token: str,
+    payload: shared.AssignmentSuspectedAiQuestionPayload,
+    request: Request,
+):
+    shared._require_admin(request)
+    token_str = str(token or "").strip()
+    qid = str(payload.qid or "").strip()
+    quiz_paper = shared.deps.get_quiz_paper_by_token(token_str)
+    if not quiz_paper:
+        raise shared.HTTPException(status_code=404, detail="答题记录不存在")
+    if not qid:
+        raise shared.HTTPException(status_code=422, detail="缺少题目编号")
+
+    if not _is_subjective_question(quiz_paper, qid):
+        raise shared.HTTPException(status_code=422, detail="只能标记当前答题中的主观题")
+
+    current_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for value in quiz_paper.get("suspected_ai_question_ids") or []:
+        current_qid = str(value or "").strip()
+        if not current_qid or current_qid in seen_ids:
+            continue
+        seen_ids.add(current_qid)
+        current_ids.append(current_qid)
+    next_ids = [current_qid for current_qid in current_ids if current_qid != qid]
+    if payload.suspected:
+        next_ids.append(qid)
+    shared.deps.set_quiz_paper_suspected_ai_question_ids(token_str, next_ids)
+    return {
+        "item": {
+            "token": token_str,
+            "suspected_ai_question_ids": next_ids,
+            "suspected_ai_question_count": len(next_ids),
+            "needs_attention": bool(
+                str(quiz_paper.get("status") or "").strip().lower() == "finished"
+                and not quiz_paper.get("handled_at")
+            ),
+        },
     }
 
 

@@ -30,16 +30,40 @@
                     <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">测验列表</h2>
                     <p class="mt-1 text-sm text-slate-600">只保留 Git 仓库同步</p>
                   </div>
-                  <div x-data="{ composing: false }" class="min-w-0 w-full lg:w-[20rem]">
-                    <input
-                      x-model="filters.quizzes.q"
-                      @change="loadQuizzes"
-                      @compositionstart="composing = true"
-                      @compositionend="composing = false"
-                      @keydown.enter.prevent="if (!composing) $event.target.blur()"
-                      class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300"
-                      placeholder="搜索标题 / ID / tags"
-                    />
+                  <div class="flex min-w-0 flex-1 flex-col justify-end gap-2 lg:flex-row lg:items-center">
+                    <div class="flex items-center gap-2">
+                      <label class="sr-only" for="quiz-list-sort">列表排序</label>
+                      <select
+                        id="quiz-list-sort"
+                        x-model="filters.quizzes.sortBy"
+                        @change="loadQuizzes"
+                        class="h-10 min-w-0 rounded-lg border border-blue-100 bg-white px-3 py-0 text-sm font-normal text-slate-700 outline-none transition focus:border-blue-300"
+                      >
+                        <option value="updated_at">更新时间</option>
+                        <option value="respondent_count">答题人数</option>
+                      </select>
+                      <button
+                        type="button"
+                        @click="toggleQuizSortOrder"
+                        :aria-label="filters.quizzes.sortOrder === 'asc' ? '切换为倒序' : '切换为正序'"
+                        :title="filters.quizzes.sortOrder === 'asc' ? '当前正序，点击切换为倒序' : '当前倒序，点击切换为正序'"
+                        class="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg border border-blue-100 bg-white px-3 py-0 text-sm font-normal text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <span class="font-normal leading-none" x-text="filters.quizzes.sortOrder === 'asc' ? '↑' : '↓'"></span>
+                        <span class="font-normal" x-text="filters.quizzes.sortOrder === 'asc' ? '正序' : '倒序'"></span>
+                      </button>
+                    </div>
+                    <div x-data="{ composing: false }" class="min-w-0 w-full lg:w-[20rem]">
+                      <input
+                        x-model="filters.quizzes.q"
+                        @change="loadQuizzes"
+                        @compositionstart="composing = true"
+                        @compositionend="composing = false"
+                        @keydown.enter.prevent="if (!composing) $event.target.blur()"
+                        class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300"
+                        placeholder="搜索标题 / ID / tags"
+                      />
+                    </div>
                   </div>
                 </div>
                 <div class="mt-5 grid gap-3">
@@ -56,11 +80,20 @@
                         </div>
                         <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                           <span class="rounded-full bg-slate-100 px-2.5 py-1">题目数 <strong x-text="item.question_count"></strong></span>
+                          <span :class="quizListRespondentBadgeClass()">答题人数 <strong class="tabular-nums" x-text="item.respondent_count || 0"></strong></span>
                           <span class="rounded-full bg-slate-100 px-2.5 py-1">预计 <strong x-text="item.estimated_duration_minutes || 0"></strong> 分钟</span>
                           <span class="rounded-full bg-slate-100 px-2.5 py-1">版本 <strong x-text="item.current_version_no || '-'"></strong></span>
                           <span class="rounded-full bg-slate-100 px-2.5 py-1">状态 <strong x-text="item.status"></strong></span>
                         </div>
-                        <div x-show="(item.tags || []).length" class="mt-3 text-xs text-slate-500" x-text="(item.tags || []).join(' · ')"></div>
+                        <div class="mt-3 flex min-w-0 items-center justify-between gap-3">
+                          <div
+                            x-show="(item.tags || []).length"
+                            :title="(item.tags || []).join(' · ')"
+                            class="min-w-0 flex-1 truncate text-xs text-slate-500"
+                            x-text="(item.tags || []).join(' · ')"
+                          ></div>
+                          <time :class="quizListUpdateTimeClass()" x-text="'更新时间 ' + (formatDateTime(item.updated_at) || '-')"></time>
+                        </div>
                       </div>
                       <div class="flex items-center gap-2 text-xs text-slate-500">
                         <span x-show="item.public_invite_enabled" class="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-emerald-700">公开邀约</span>
