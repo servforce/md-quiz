@@ -101,13 +101,13 @@ def test_admin_assignment_suspected_ai_controls_are_present() -> None:
     assert "attemptDetail.quiz_paper?.suspected_ai_question_count || 0" in attempt_source
     assert "疑似AI-" in assignments_source
     assert "assignmentSuspectedAiQuestionCount(item)" in assignments_source
-    assert 'x-show="assignmentHasCompletedGrading(item)"' in assignments_source
+    assert 'x-show="assignmentHasCompletedGrading(item) && assignmentSuspectedAiQuestionCount(item) > 0"' in assignments_source
     assert "sm:flex-row sm:flex-wrap" in assignments_source
     assert "whitespace-nowrap text-lg" in assignments_source
     assert 'class="truncate whitespace-nowrap text-lg' not in assignments_source
     assert "sm:flex-none sm:shrink-0" in assignments_source
     assert "sm:ml-auto sm:shrink-0 sm:flex-nowrap" in assignments_source
-    assert "<div x-show=\"assignmentHasCompletedGrading(item)\" class=\"mt-3\">\n                        <span class=\"assignment-badge border-rose-200" in assignments_source
+    assert "<div\n                        x-show=\"assignmentHasCompletedGrading(item) && assignmentSuspectedAiQuestionCount(item) > 0\"\n                        class=\"mt-3\"\n                      >\n                        <span class=\"assignment-badge border-rose-200" in assignments_source
     assert "/suspected-ai-question" in module_source
     assert "attemptSuspectedAiButtonClass(question)" in module_source
     assert "attempt-suspected-ai-toggle" in module_source
