@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from backend.md_quiz.services.exam_helpers import *
 from backend.md_quiz.services.support_deps import *
 from backend.md_quiz.services.validation_helpers import *
+from backend.md_quiz.services import answer_activity
 
 def _timing_ignored(assignment: dict) -> bool:
     return bool((assignment or {}).get("ignore_timing"))
@@ -45,7 +48,23 @@ def _finalize_if_time_up(token: str, assignment: dict, *, now: datetime | None =
         now = datetime.now(timezone.utc)
     if not _is_time_up(assignment, now=now):
         return False
-    _finalize_public_submission(token, assignment, now=now)
+    started_at = _parse_iso_dt((assignment.get("timing") or {}).get("start_at"))
+    deadline = started_at + timedelta(seconds=int(assignment.get("time_limit_seconds") or 0)) if started_at else now
+    flow = assignment.get("question_flow") or {}
+    snapshot = get_exam_snapshot_for_assignment(assignment) or {}
+    questions = ((snapshot.get("public_spec") or {}).get("questions") or [])
+    index = max(0, int(flow.get("current_index") or 0))
+    while index < len(questions) - 1:
+        question_start = _parse_iso_dt(flow.get("current_started_at"))
+        seconds = max(0, int((questions[index] or {}).get("answer_time_seconds") or 0))
+        if not question_start or not seconds or question_start + timedelta(seconds=seconds) > deadline:
+            break
+        question_end = question_start + timedelta(seconds=seconds)
+        answer_activity.close_question(assignment, str((questions[index] or {}).get("qid") or ""), question_start, question_end, "timeout")
+        index += 1
+        flow["current_index"] = index
+        flow["current_started_at"] = question_end.isoformat()
+    _finalize_public_submission(token, assignment, now=deadline, reason="exam_timeout")
     return True
 
 
@@ -63,7 +82,7 @@ def _duration_seconds(assignment: dict) -> int | None:
         return None
 
 
-def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) -> None:
+def _finalize_public_submission(token: str, assignment: dict, *, now: datetime, reason: str = "submit") -> None:
     """
     Finalize a candidate submission by marking it submitted and enqueueing background grading.
 
@@ -71,6 +90,17 @@ def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) 
     """
     if assignment.get("grading"):
         return
+
+    flow = assignment.get("question_flow") or {}
+    started_at = flow.get("current_started_at")
+    if started_at:
+        snapshot = get_exam_snapshot_for_assignment(assignment) or {}
+        public_spec = snapshot.get("public_spec") or {}
+        questions = public_spec.get("questions") or []
+        index = max(0, int(flow.get("current_index") or 0))
+        if index < len(questions):
+            qid = str((questions[index] or {}).get("qid") or "").strip()
+            answer_activity.close_question(assignment, qid, started_at, now, reason)
 
     assignment.setdefault("timing", {})["end_at"] = now.isoformat()
     assignment["status"] = "grading"
@@ -560,6 +590,7 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
             "score": sd.get("score"),
             "score_max": sd.get("max") or (full_q.get("max_points") or full_q.get("points") or pub_q.get("max_points") or pub_q.get("points")),
             "reason": sd.get("reason"),
+            "activity": (assignment.get("question_activity") or {}).get(qid),
         }
         questions_out.append(item)
 

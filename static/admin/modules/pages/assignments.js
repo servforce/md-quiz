@@ -242,6 +242,37 @@ export function createAdminAssignmentsModule() {
       return Array.isArray(answers) ? answers : [];
     },
 
+    attemptActivityTime(ms) {
+      if (!Number.isFinite(Number(ms))) return "-";
+      const seconds = Math.max(0, Number(ms)) / 1000;
+      const minutes = Math.floor(seconds / 60);
+      return `${String(minutes).padStart(2, "0")}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
+    },
+
+    attemptActivityEndReason(reason) {
+      return { advance: "完成本题", submit: "提交答卷", timeout: "本题超时", exam_timeout: "整卷超时" }[reason] || "结束";
+    },
+
+    attemptInputEventKind(kind) {
+      return { insert: "输入", delete: "删除", replace: "替换", paste: "粘贴", composition: "输入法提交" }[kind] || "编辑";
+    },
+
+    attemptInputEvents(question) {
+      const events = question?.activity?.input?.events;
+      const limit = Number(this.attemptInputEventLimit?.[question?.qid] || 100);
+      return Array.isArray(events) ? events.slice(0, limit) : [];
+    },
+
+    attemptInputHasMore(question) {
+      const events = question?.activity?.input?.events;
+      return Array.isArray(events) && events.length > Number(this.attemptInputEventLimit?.[question?.qid] || 100);
+    },
+
+    showMoreAttemptInput(question) {
+      const qid = String(question?.qid || "");
+      this.attemptInputEventLimit = { ...this.attemptInputEventLimit, [qid]: Number(this.attemptInputEventLimit?.[qid] || 100) + 100 };
+    },
+
     attemptReviewEvaluation() {
       const evaluation = this.attemptDetail?.review?.evaluation;
       return evaluation && typeof evaluation === "object" ? evaluation : {};
@@ -266,6 +297,12 @@ export function createAdminAssignmentsModule() {
 
     attemptReviewIsShortQuestion(question) {
       return this.attemptReviewQuestionKind(question) === "short";
+    },
+
+    attemptQuestionHasInputSignals(question) {
+      return this.attemptReviewIsShortQuestion(question)
+        && Array.isArray(question?.activity?.input?.signals)
+        && question.activity.input.signals.length > 0;
     },
 
     assignmentSuspectedAiQuestionIds(item) {
@@ -1122,6 +1159,7 @@ export function createAdminAssignmentsModule() {
       const previousStatus = this.assignmentStatusValue(this.attemptDetail?.quiz_paper);
       if (String(this.attemptDetail?.quiz_paper?.token || "") !== currentToken) {
         this.attemptDetail = { assignment: {}, quiz_paper: {}, archive: {}, review: { answers: [], evaluation: {} } };
+        this.attemptInputEventLimit = {};
       }
       const data = await this.api(`/api/admin/attempts/${encodeURIComponent(currentToken)}`, { quiet });
       if (!data || requestId !== detailRequestId || this.route.name !== "attempt-detail" || this.route.params.token !== currentToken) return;

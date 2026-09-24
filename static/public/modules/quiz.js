@@ -1,9 +1,114 @@
+export function summarizeTextChange(beforeValue, afterValue, inputType = "", wasPaste = false, forcedKind = "") {
+  const before = Array.from(String(beforeValue || ""));
+  const after = Array.from(String(afterValue || ""));
+  let prefix = 0;
+  while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix += 1;
+  let suffix = 0;
+  while (suffix < before.length - prefix && suffix < after.length - prefix
+    && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix += 1;
+  const added = after.length - prefix - suffix;
+  const deleted = before.length - prefix - suffix;
+  if (!added && !deleted) return null;
+  const kind = forcedKind || (wasPaste || inputType === "insertFromPaste" ? "paste"
+    : inputType.startsWith("delete") ? "delete" : added && deleted ? "replace" : added ? "insert" : "delete");
+  return { kind, added_chars: added, deleted_chars: deleted, length_after: after.length };
+}
+
 export function createPublicQuizModule() {
   return {
           clearAutosaveTimer() {
             if (this.autosaveTimer) {
               window.clearTimeout(this.autosaveTimer);
               this.autosaveTimer = null;
+            }
+          },
+
+          resetActivityCapture(question) {
+            if (this.activityFlushTimer) window.clearTimeout(this.activityFlushTimer);
+            this.activityFlushTimer = null;
+            this.activityQuestionId = question?.type === "short" && this.viewCard === "question" ? String(question.qid || "") : "";
+            this.activityCaptureId = this.activityQuestionId
+              ? (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`) : "";
+            this.activityBaseline = this.activityQuestionId ? String(this.textDraft || "") : "";
+            this.activityNextSeq = 1;
+            this.activityPending = [];
+            this.activityPastePending = false;
+            this.activityIsComposing = false;
+          },
+
+          syncQuestionClock(question) {
+            const serverNow = Date.parse(this.state.quiz?.server_now || "");
+            const questionStart = Date.parse(this.state.quiz?.question_flow?.current_started_at || "");
+            const remainingSeconds = Number(this.state.quiz?.question_flow?.current_question_remaining_seconds);
+            const durationSeconds = Number(question?.answer_time_seconds || this.state.quiz?.question_flow?.current_question_seconds || 0);
+            this.questionElapsedAtSyncMs = Number.isFinite(serverNow) && Number.isFinite(questionStart)
+              ? Math.max(0, serverNow - questionStart)
+              : Number.isFinite(remainingSeconds) && Number.isFinite(durationSeconds)
+                ? Math.max(0, (durationSeconds - remainingSeconds) * 1000) : 0;
+            this.questionClockSyncedAtMs = performance.now();
+          },
+
+          scheduleActivityFlush() {
+            if (this.activityFlushTimer || !this.activityPending.length) return;
+            this.activityFlushTimer = window.setTimeout(() => {
+              this.activityFlushTimer = null;
+              this.flushActivity();
+            }, 2000);
+          },
+
+          recordTextChange(event, forcedKind = "") {
+            if (!this.activityQuestionId || this.activityQuestionId !== this.currentQuestion()?.qid) return;
+            if (event?.isComposing || this.activityIsComposing) return;
+            const afterValue = String(event?.target?.value ?? this.textDraft ?? "");
+            const wasPaste = this.activityPastePending && (!event?.inputType || event.inputType === "insertFromPaste");
+            this.activityPastePending = false;
+            const inputType = String(event?.inputType || "");
+            const change = summarizeTextChange(this.activityBaseline, afterValue, inputType, wasPaste, forcedKind);
+            this.activityBaseline = afterValue;
+            if (!change) return;
+            this.activityPending.push({
+              seq: this.activityNextSeq++,
+              elapsed_ms: Math.max(0, Math.round(this.questionElapsedAtSyncMs + performance.now() - this.questionClockSyncedAtMs)),
+              ...change,
+            });
+            if (this.activityPending.length >= 20) this.flushActivity();
+            else this.scheduleActivityFlush();
+          },
+
+          onTextCompositionEnd(event) {
+            this.activityIsComposing = false;
+            this.recordTextChange(event, "composition");
+          },
+
+          async flushActivity() {
+            if (this.activityFlushPromise) return this.activityFlushPromise;
+            if (!this.activityQuestionId || !this.activityPending.length || !this.route.token) return true;
+            const captureId = this.activityCaptureId;
+            const questionId = this.activityQuestionId;
+            this.activityFlushPromise = (async () => {
+              while (this.activityPending.length && this.activityCaptureId === captureId) {
+                const events = this.activityPending.slice(0, 100);
+                try {
+                  await this.api(`/api/public/answers/${encodeURIComponent(this.route.token)}/activity`, {
+                    method: "POST",
+                    body: JSON.stringify({ question_id: questionId, session_id: this.sessionId, capture_id: captureId, events }),
+                    headers: { "Content-Type": "application/json" },
+                    manageState: false,
+                  });
+                } catch (_) {
+                  return false;
+                }
+                if (this.activityCaptureId !== captureId) return false;
+                const lastSeq = events[events.length - 1].seq;
+                this.activityPending = this.activityPending.filter((item) => item.seq > lastSeq);
+              }
+              return true;
+            })();
+            try {
+              return await this.activityFlushPromise;
+            } finally {
+              this.activityFlushPromise = null;
+              this.scheduleActivityFlush();
             }
           },
 
@@ -49,9 +154,8 @@ export function createPublicQuizModule() {
             const durationSeconds = Number(question.answer_time_seconds || this.state.quiz?.question_flow?.current_question_seconds || 0);
             const durationMs = Math.max(0, durationSeconds * 1000);
             if (!startedAt || durationMs <= 0) return durationMs;
-            const startedMs = Date.parse(startedAt);
-            if (Number.isNaN(startedMs)) return durationMs;
-            const elapsedMs = Math.max(0, Date.now() - startedMs);
+            if (this.questionClockSyncedAtMs == null) return durationMs;
+            const elapsedMs = Math.max(0, this.questionElapsedAtSyncMs + performance.now() - this.questionClockSyncedAtMs);
             return Math.max(0, durationMs - elapsedMs);
           },
 
@@ -210,6 +314,8 @@ export function createPublicQuizModule() {
             if (!question || !this.route.token) return;
             this.actionBusy = true;
             try {
+              if (question.type === "short") await this.flushActivity();
+              const pending = question.type === "short" ? this.activityPending.slice(-100) : [];
               const data = await this.api(`/api/public/answers/${encodeURIComponent(this.route.token)}`, {
                 method: "POST",
                 body: JSON.stringify({
@@ -219,6 +325,13 @@ export function createPublicQuizModule() {
                   submit: Boolean(action.submit),
                   session_id: this.sessionId,
                   force_timeout: Boolean(action.forceTimeout),
+                  activity: pending.length ? {
+                    question_id: question.qid,
+                    session_id: this.sessionId,
+                    capture_id: this.activityCaptureId,
+                    events: pending,
+                    dropped_events: Math.max(0, this.activityPending.length - pending.length),
+                  } : null,
                 }),
                 headers: { "Content-Type": "application/json" },
               });
@@ -264,9 +377,10 @@ export function createPublicQuizModule() {
             this.autosaveMessage = this.deferredSaveText();
           },
 
-          onTextInput() {
+          onTextInput(event) {
             this.clearAutosaveTimer();
             this.autosaveMessage = this.deferredSaveText();
+            this.recordTextChange(event);
           },
 
           async goNext() {

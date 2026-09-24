@@ -50,7 +50,10 @@
                 <div x-show="currentQuestion()?.type === 'short'" class="mt-4 overflow-hidden rounded-lg border border-white/10 bg-white/6">
                   <textarea
                     x-model="textDraft"
-                    @input="onTextInput"
+                    @input="onTextInput($event)"
+                    @paste="activityPastePending = true"
+                    @compositionstart="activityIsComposing = true; activityPastePending = false"
+                    @compositionend="onTextCompositionEnd($event)"
                     class="block h-64 w-full rounded-none border-0 bg-transparent px-4 py-4 text-sm leading-7 text-white outline-none placeholder:text-slate-500"
                     placeholder="输入你的答案"
                   ></textarea>

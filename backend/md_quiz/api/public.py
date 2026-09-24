@@ -5,10 +5,10 @@ from io import BytesIO
 from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.md_quiz.config import load_runtime_defaults
-from backend.md_quiz.services import exam_helpers, runtime_bootstrap, runtime_jobs, support_deps as deps
+from backend.md_quiz.services import answer_activity, exam_helpers, runtime_bootstrap, runtime_jobs, support_deps as deps
 from backend.md_quiz.services import public_flow_service
 from backend.md_quiz.services.request_url_helpers import external_base_url
 from backend.md_quiz.services import validation_helpers
@@ -36,6 +36,25 @@ class UseExistingResumePayload(BaseModel):
     token: str
 
 
+class ActivityEventPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    seq: int = Field(ge=1)
+    elapsed_ms: int = Field(ge=0)
+    kind: str
+    added_chars: int = Field(ge=0, le=100_000)
+    deleted_chars: int = Field(ge=0, le=100_000)
+    length_after: int = Field(ge=0, le=100_000)
+
+
+class ActivityBatchPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question_id: str = Field(min_length=1, max_length=100)
+    session_id: str = Field(min_length=1, max_length=80)
+    capture_id: str = Field(min_length=1, max_length=80)
+    events: list[ActivityEventPayload] = Field(max_length=answer_activity.MAX_EVENTS_PER_BATCH)
+    dropped_events: int = Field(default=0, ge=0)
+
+
 class AnswerActionPayload(BaseModel):
     question_id: str = ""
     answer: Any = None
@@ -43,6 +62,7 @@ class AnswerActionPayload(BaseModel):
     submit: bool = False
     session_id: str = ""
     force_timeout: bool = False
+    activity: ActivityBatchPayload | None = None
 
 
 def _public_base_url(request: Request) -> str:
@@ -207,10 +227,15 @@ def _sync_question_timeouts(token: str, assignment: dict[str, Any], questions: l
             break
         limit = max(0, int(question.get("answer_time_seconds") or 0))
         if limit <= 0 or now < started_at + timedelta(seconds=limit):
+            qid = str(question.get("qid") or "").strip()
+            if qid and qid not in (assignment.get("question_activity") or {}):
+                answer_activity.question_record(assignment, qid, flow["current_started_at"])
+                changed = True
             break
         next_started_at = (started_at + timedelta(seconds=limit)).isoformat()
+        answer_activity.close_question(assignment, str(question.get("qid") or "").strip(), flow["current_started_at"], started_at + timedelta(seconds=limit), "timeout")
         if index >= len(questions) - 1:
-            runtime_jobs._finalize_public_submission(token, assignment, now=now)
+            runtime_jobs._finalize_public_submission(token, assignment, now=now, reason="timeout")
             return True
         flow["current_index"] = index + 1
         flow["current_started_at"] = next_started_at
@@ -248,6 +273,7 @@ def _register_public_session(token: str, assignment: dict[str, Any], session_id:
 
 def _serialize_assignment_payload(assignment: dict[str, Any]) -> dict[str, Any]:
     current = dict(assignment or {})
+    current.pop("question_activity", None)
     current["quiz_key"] = str(current.get("quiz_key") or "").strip()
     status_text = validation_helpers._normalize_exam_status(str(current.get("status") or "").strip())
     current["status"] = status_text
@@ -313,6 +339,7 @@ def _build_quiz_payload(assignment: dict[str, Any], public_spec: dict[str, Any],
     current_index, current_question = _current_question(questions, flow)
     ignore_timing = _assignment_ignore_timing(assignment)
     return {
+        "server_now": datetime.now(timezone.utc).isoformat(),
         "quiz_key": str(assignment.get("quiz_key") or "").strip(),
         "title": str(public_spec.get("title") or "").strip(),
         "description": str(public_spec.get("description") or "").strip(),
@@ -436,6 +463,28 @@ def _answer_is_ready(question: dict[str, Any], answer: Any) -> bool:
     return bool(str(answer or "").strip())
 
 
+def _record_activity_batch(
+    assignment: dict[str, Any], question: dict[str, Any], flow: dict[str, Any],
+    batch: ActivityBatchPayload, *, now: datetime,
+) -> int:
+    qid = str(question.get("qid") or "").strip()
+    if str(question.get("type") or "") != "short" or batch.question_id != qid:
+        raise HTTPException(status_code=409, detail="question_locked")
+    if batch.session_id != str(flow.get("active_session_id") or ""):
+        raise HTTPException(status_code=409, detail="session_changed")
+    started_at = runtime_jobs._parse_iso_dt(flow.get("current_started_at"))
+    if not started_at:
+        raise HTTPException(status_code=400, detail="请先开始答题")
+    latest_ms = max(0, round((now - started_at).total_seconds() * 1000)) + 5000
+    events = [event.model_dump() for event in batch.events]
+    if any(event["kind"] not in answer_activity.EVENT_KINDS or event["elapsed_ms"] > latest_ms for event in events):
+        raise HTTPException(status_code=422, detail="invalid_activity")
+    return answer_activity.record_input_batch(
+        assignment, qid, flow["current_started_at"],
+        {"capture_id": batch.capture_id, "events": events, "dropped_events": batch.dropped_events},
+    )
+
+
 def _apply_answer_action(token: str, action: AnswerActionPayload, *, session_id: str) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     should_reload = False
@@ -489,6 +538,9 @@ def _apply_answer_action(token: str, action: AnswerActionPayload, *, session_id:
             if action.question_id and str(action.question_id or "").strip() != current_qid:
                 raise HTTPException(status_code=409, detail="question_locked")
 
+            if action.activity:
+                _record_activity_batch(assignment, question, flow, action.activity, now=now)
+
             answers = assignment.setdefault("answers", {})
             if action.force_timeout:
                 answers.pop(current_qid, None)
@@ -509,10 +561,19 @@ def _apply_answer_action(token: str, action: AnswerActionPayload, *, session_id:
                     raise HTTPException(status_code=400, detail="请先完成本题")
 
                 if current_index >= len(questions) - 1 or action.submit:
-                    runtime_jobs._finalize_public_submission(token, assignment, now=now)
+                    runtime_jobs._finalize_public_submission(
+                        token, assignment, now=now,
+                        reason="timeout" if action.force_timeout else "submit",
+                    )
                 else:
+                    answer_activity.close_question(
+                        assignment, current_qid, flow.get("current_started_at"), now,
+                        "timeout" if action.force_timeout else "advance",
+                    )
                     flow["current_index"] = current_index + 1
                     flow["current_started_at"] = now.isoformat()
+                    next_qid = str(questions[current_index + 1].get("qid") or "").strip()
+                    answer_activity.question_record(assignment, next_qid, flow["current_started_at"])
                     assignment["status"] = "in_quiz"
                     assignment["status_updated_at"] = now.isoformat()
                     deps.save_assignment(token, assignment)
@@ -552,7 +613,7 @@ def _bootstrap_attempt(token: str, *, session_id: str = "") -> dict[str, Any]:
         return {
             "token": token,
             "step": "unavailable",
-            "assignment": assignment,
+            "assignment": _serialize_assignment_payload(assignment),
             "invite_window": _invite_window_payload(start_date, end_date),
             "unavailable": {
                 "title": "未到答题时间",
@@ -567,7 +628,7 @@ def _bootstrap_attempt(token: str, *, session_id: str = "") -> dict[str, Any]:
         return {
             "token": token,
             "step": "unavailable",
-            "assignment": assignment,
+            "assignment": _serialize_assignment_payload(assignment),
             "invite_window": _invite_window_payload(start_date, end_date),
             "unavailable": {
                 "title": "邀约已失效",
@@ -739,6 +800,10 @@ def enter_quiz(token: str, request: Request):
             flow = _normalize_question_flow(assignment)
             flow["current_index"] = max(0, int(flow.get("current_index") or 0))
             flow["current_started_at"] = now.isoformat()
+            questions = list(public_spec.get("questions") or [])
+            if questions:
+                _, current_question = _current_question(questions, flow)
+                answer_activity.question_record(assignment, str((current_question or {}).get("qid") or ""), flow["current_started_at"])
             if session_id:
                 flow["active_session_id"] = session_id
                 flow["last_session_seen_at"] = now.isoformat()
@@ -821,6 +886,29 @@ async def public_save_answer(token: str, request: Request):
         )
     session_id = _normalize_public_session_id(payload.session_id or _session_id_from_request(request))
     return _apply_answer_action(token, payload, session_id=session_id)
+
+
+@router.post("/answers/{token}/activity")
+def public_save_answer_activity(token: str, payload: ActivityBatchPayload):
+    now = datetime.now(timezone.utc)
+    with deps.assignment_locked(token):
+        assignment = deps.load_assignment(token)
+        if assignment.get("grading") or runtime_jobs._finalize_if_time_up(token, assignment, now=now):
+            raise HTTPException(status_code=409, detail="already_submitted")
+        if int(assignment.get("candidate_id") or 0) <= 0:
+            raise HTTPException(status_code=400, detail="请先完成身份验证")
+        public_spec, _ = _load_public_quiz_bundle(assignment)
+        questions = list(public_spec.get("questions") or [])
+        if _sync_question_timeouts(token, assignment, questions, now=now):
+            raise HTTPException(status_code=409, detail="already_submitted")
+        flow = _normalize_question_flow(assignment)
+        _, question = _current_question(questions, flow)
+        if not question:
+            raise HTTPException(status_code=400, detail="题目不存在")
+        accepted = _record_activity_batch(assignment, question, flow, payload, now=now)
+        if accepted or payload.dropped_events:
+            deps.save_assignment(token, assignment)
+    return {"accepted": accepted}
 
 
 @router.post("/answers_bulk/{token}")

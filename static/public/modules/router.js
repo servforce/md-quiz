@@ -238,6 +238,9 @@ export function createPublicRouterModule() {
             this.selectedMultiple = [];
           }
 
+          this.syncQuestionClock(question);
+          this.resetActivityCapture(question);
+
           this.autosaveMessage = this.state.quiz?.entered_at ? this.deferredSaveText(question) : "";
           this.syncQuestionTimer();
           await this.renderCurrentView();

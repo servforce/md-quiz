@@ -275,6 +275,7 @@
 - `stem_html`
 - `rubric_html`
 - `options[].text_html`
+- `activity`：逐题 `started_at`、`ended_at`、`duration_ms`、`end_reason`；简答题有输入事件、汇总、异常线索和截断状态。历史答卷可能为 `null`。异常线索仅供人工复核，不自动设置疑似 AI 标记。
 
 ### `POST /api/admin/assignments/{token}/suspected-ai-question`
 
@@ -441,6 +442,23 @@
 ### `POST /api/public/answers/{token}`
 
 保存当前题答案，并可按请求语义推进到下一题或直接提交。旧题保存会返回冲突，候选人端据此禁止回退修改。
+
+简答题可附带 `activity` 批次，与答案一同保存。批次格式与下方独立接口一致；不包含中途文本或原始按键。
+
+### `POST /api/public/answers/{token}/activity`
+
+仅保存当前简答题的文本变动统计，不保存答案，也不推进题目。请求示例：
+
+```json
+{
+  "question_id": "Q3",
+  "session_id": "当前会话 ID",
+  "capture_id": "本次页面采集 ID",
+  "events": [{"seq": 1, "elapsed_ms": 1250, "kind": "insert", "added_chars": 2, "deleted_chars": 0, "length_after": 2}]
+}
+```
+
+`kind` 可为 `insert`、`delete`、`replace`、`paste`、`composition`。`elapsed_ms` 是相对本题开始的时间；每批最多 100 个事件。服务端按 `capture_id + seq` 去重，并在逐题记录中保存汇总与最多 20,000 个事件。错误题号或会话返回 `409`，无效事件返回 `422`。公开答题响应不返回输入时间线。
 
 ### `POST /api/public/answers_bulk/{token}`
 

@@ -87,6 +87,8 @@
 
 业务主数据同样已经落在 PostgreSQL，对应表结构以 `backend/md_quiz/storage/db.py:init_db()` 为准。
 
+`assignment_record.data.question_activity` 按题号保存开始与结束时间、耗时和结束原因。简答题还保存文本变动事件、字数汇总和人工复核线索；不保存中途文本或物理按键。判卷归档将对应记录写入 `quiz_archive.archive.questions[*].activity`，供管理端答卷详情回看。历史答卷可以没有这些字段。
+
 ## 迁移说明
 
 历史 `storage/runtime/*.json` 只在需要兼容旧部署数据时作为一次性迁移输入源：

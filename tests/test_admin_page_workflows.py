@@ -110,3 +110,21 @@ assert.equal(app.quizAnalyticsItemMatchesScoreFilter({ score: 90, score_max: 100
 assert.equal(app.quizAnalyticsItemMatchesScoreFilter({ score: 90, score_max: 120 }, { start: 80, end: 100, scoreMax: 100 }), false);
 """,
     )
+
+
+def test_attempt_input_review_mark_only_includes_short_answers_with_signals(tmp_path: Path) -> None:
+    _run_page_modules(
+        tmp_path,
+        """
+const app = Object.assign({ attemptDetail: { review: { answers: [
+  { qid: 'Q1', type: 'short', activity: { input: { signals: [{ kind: 'large_paste' }] } } },
+  { qid: 'Q2', type: 'short', activity: { input: { signals: [] } } },
+  { qid: 'Q3', type: 'short' },
+  { qid: 'Q4', type: 'single', activity: { input: { signals: [{ kind: 'large_insert' }] } } },
+] } } }, createAdminAssignmentsModule());
+assert.equal(app.attemptQuestionHasInputSignals(app.attemptReviewAnswers()[0]), true);
+assert.equal(app.attemptQuestionHasInputSignals(app.attemptReviewAnswers()[1]), false);
+assert.equal(app.attemptQuestionHasInputSignals(app.attemptReviewAnswers()[2]), false);
+assert.equal(app.attemptQuestionHasInputSignals(app.attemptReviewAnswers()[3]), false);
+""",
+    )

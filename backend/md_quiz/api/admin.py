@@ -330,6 +330,12 @@ def _build_review_answer_item(
         is_correct = set(selected_options) == set(correct_options)
         is_partial = not bool(is_correct) and score is not None and int(score or 0) > 0 and int(score or 0) < int(score_max or 0)
     score_display = _score_display(score, score_max, result_mode="scored") if review_kind != "traits" and score is not None else ""
+    activity = raw_question.get("activity") if isinstance(raw_question.get("activity"), dict) else None
+    if activity:
+        activity = dict(activity)
+        input_data = activity.get("input")
+        if isinstance(input_data, dict):
+            activity["input"] = {key: value for key, value in input_data.items() if key != "last_seq_by_capture"}
     return {
         "qid": qid,
         "label": raw_question.get("label") or (spec_question or {}).get("label") or (public_question or {}).get("label") or qid,
@@ -353,6 +359,7 @@ def _build_review_answer_item(
         "reason": str(raw_question.get("reason") or "").strip(),
         "rubric": rubric,
         "rubric_html": rubric_html,
+        "activity": activity,
     }
 
 
@@ -414,9 +421,12 @@ def _build_review_answers(
             if not isinstance(raw_question, dict):
                 continue
             qid = str(raw_question.get("qid") or "").strip()
+            item = dict(raw_question)
+            if not item.get("activity") and isinstance(assignment, dict):
+                item["activity"] = (assignment.get("question_activity") or {}).get(qid)
             answers.append(
                 _build_review_answer_item(
-                    dict(raw_question),
+                    item,
                     spec_question=spec_by_qid.get(qid),
                     public_question=public_by_qid.get(qid),
                 )
@@ -445,6 +455,7 @@ def _build_review_answers(
             "score": score_detail.get("score"),
             "score_max": score_detail.get("max") or spec_question.get("max_points") or spec_question.get("points"),
             "reason": score_detail.get("reason"),
+            "activity": (assignment.get("question_activity") or {}).get(qid),
         }
         answers.append(
             _build_review_answer_item(
