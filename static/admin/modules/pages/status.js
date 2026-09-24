@@ -76,8 +76,12 @@ export function createAdminStatusModule() {
 
     async loadStatus() {
       const data = await this.api("/api/admin/system-status");
-      this.statusRange = data || { data: {} };
-      this.statusConfig = { ...(data?.config || {}) };
+      if (!data) return;
+      this.statusRange = data;
+      if (!this.statusConfigBaseline || JSON.stringify(this.statusConfig) === this.statusConfigBaseline) {
+        this.statusConfig = { ...(data.config || {}) };
+        this.statusConfigBaseline = JSON.stringify(this.statusConfig);
+      }
       this.statusSummary = data?.summary || {};
       if (!Object.keys(this.statusSummary || {}).length) {
         await this.loadStatusSummary();
@@ -227,6 +231,19 @@ export function createAdminStatusModule() {
       ];
     },
 
+    selectedMcpClient() {
+      const clients = this.mcpClientConfigs();
+      return clients.find((item) => item.key === this.mcpSelectedClient) || clients[0];
+    },
+
+    async copyMcpClientConfig() {
+      try {
+        await this.copyText(this.selectedMcpClient().snippet, "客户端配置已复制");
+      } catch (_error) {
+        this.showNotice("复制失败，请选择配置文本手动复制");
+      }
+    },
+
     openMcpDocs() {
       const target = this.mcpDocsUrl();
       if (!target || typeof window === "undefined") return;
@@ -234,13 +251,24 @@ export function createAdminStatusModule() {
     },
 
     async saveStatusConfig() {
+      if (this.statusConfigSaving) return;
+      this.statusConfigSaving = true;
+      try {
       const data = await this.api("/api/admin/system-status/config", {
         method: "PUT",
         body: JSON.stringify(this.statusConfig),
         headers: { "Content-Type": "application/json" },
       });
+      if (!data) return;
       this.statusSummary = data.summary || {};
+      this.statusConfig = { ...(data.config || this.statusConfig) };
+      this.statusConfigBaseline = JSON.stringify(this.statusConfig);
       this.showNotice("系统阈值已保存");
+      } catch (_error) {
+        this.showNotice("保存失败，当前修改已保留");
+      } finally {
+        this.statusConfigSaving = false;
+      }
     },
   };
 }

@@ -1,6 +1,69 @@
 import { TRAIT_COLOR_PALETTE } from "../constants.js";
 export function createAdminQuizzesModule() {
+  let listRequestId = 0;
+  let detailRequestId = 0;
   return {
+    currentQuizzesPage() {
+      return Math.max(1, Math.floor(Number(this.quizzes?.page) || 1));
+    },
+
+    quizTotalPages() {
+      return Math.max(1, Math.floor(Number(this.quizzes?.total_pages) || 1));
+    },
+
+    async changeQuizzesPage(page) {
+      const nextPage = Math.max(1, Math.min(this.quizTotalPages(), Math.floor(Number(page) || 1)));
+      if (nextPage === this.currentQuizzesPage()) return;
+      this.quizzes.page = nextPage;
+      this.syncAdminListRoute({ replace: false });
+      await this.loadQuizzes({ page: nextPage });
+    },
+
+    async reloadQuizzesFromFirstPage({ replace = false } = {}) {
+      this.quizzes.page = 1;
+      this.syncAdminListRoute({ replace });
+      await this.loadQuizzes({ page: 1 });
+    },
+
+    quizSyncResult() {
+      const result = this.syncState?.last_result;
+      return result && typeof result === "object" ? result : {};
+    },
+
+    quizSyncErrors() {
+      const errors = this.quizSyncResult().errors;
+      return Array.isArray(errors) ? errors : [];
+    },
+
+    quizSyncStatusLabel() {
+      const status = this.syncStatus();
+      if (!this.hasRepoBinding() && !status) return "尚未绑定仓库";
+      if (status === "done" && Number(this.quizSyncResult().error_count || 0) > 0) return "同步完成，部分条目失败";
+      return ({ idle: "尚未同步", queued: "等待同步", pending: "等待同步", running: "同步中", done: "同步完成", failed: "同步失败" })[status] || status || "尚未同步";
+    },
+
+    quizSyncStatusClass() {
+      if (this.syncStatus() === "failed") return "border-rose-200 bg-rose-50 text-rose-700";
+      if (this.syncStatus() === "done") {
+        return Number(this.quizSyncResult().error_count || 0) > 0
+          ? "border-amber-200 bg-amber-50 text-amber-800"
+          : "border-emerald-200 bg-emerald-50 text-emerald-700";
+      }
+      return this.isSyncBusy() ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-600";
+    },
+
+    quizSyncCountGroups() {
+      const result = this.quizSyncResult();
+      if (this.syncStatus() !== "done") return [];
+      return [
+        { label: "测验", counts: [["扫描", "scanned_md"], ["新增版本", "created_versions"], ["更新版本", "updated_versions"], ["未变", "unchanged_versions"], ["删除", "deleted_exams"]] },
+        { label: "职位", counts: [["扫描", "scanned_job_descriptions"], ["新增", "created_job_descriptions"], ["更新", "updated_job_descriptions"], ["未变", "unchanged_job_descriptions"], ["归档", "archived_job_descriptions"]] },
+      ].map((group) => ({
+        label: group.label,
+        counts: group.counts.map(([label, key]) => ({ label, value: Number(result[key] || 0) })),
+      }));
+    },
+
     quizQuestions() {
       const questions = this.quizDetail?.selected_quiz_version?.spec?.questions;
       return Array.isArray(questions) ? questions : [];
@@ -177,14 +240,24 @@ export function createAdminQuizzesModule() {
         });
     },
 
-    async loadQuizzes({ quiet = false, source = "manual", previousSyncStatus = "", previousSyncJobId = "" } = {}) {
+    async loadQuizzes({ quiet = false, source = "manual", page = null, previousSyncStatus = "", previousSyncJobId = "" } = {}) {
+      const requestId = ++listRequestId;
       const query = new URLSearchParams();
+      query.set("page", String(page === null ? this.currentQuizzesPage() : Math.max(1, Math.floor(Number(page) || 1))));
       if (this.filters.quizzes.q) query.set("q", this.filters.quizzes.q);
+      if (this.filters.quizzes.public_invite) query.set("public_invite", this.filters.quizzes.public_invite);
       query.set("sort_by", this.filters.quizzes.sortBy || "updated_at");
       query.set("sort_order", this.filters.quizzes.sortOrder || "desc");
       const data = await this.api(`/api/admin/quizzes?${query.toString()}`, { quiet });
-      if (!data) return;
+      if (!data || requestId !== listRequestId) return;
       this.quizzes = data;
+      if (data.filters) {
+        Object.assign(this.filters.quizzes, {
+          sortBy: String(data.filters.sort_by || "updated_at"),
+          sortOrder: String(data.filters.sort_order || "desc"),
+        });
+      }
+      if (source !== "sync-poll" && this.route.name === "quizzes") this.syncAdminListRoute({ replace: true });
       this.repoBinding = data.repo_binding || {};
       this.syncState = data.sync_state || {};
       if (!this.hasRepoBinding() && this.syncState.repo_url && (this.isSyncBusy() || !this.syncForm.repoUrl)) {
@@ -203,19 +276,19 @@ export function createAdminQuizzesModule() {
       }
       if (
         source === "sync-poll" &&
-        ["queued", "running"].includes(String(previousSyncStatus || "").trim().toLowerCase()) &&
-        !["queued", "running"].includes(currentSyncStatus)
+        ["queued", "pending", "running"].includes(String(previousSyncStatus || "").trim().toLowerCase()) &&
+        !["queued", "pending", "running"].includes(currentSyncStatus)
       ) {
         const finishedJobId = String(this.syncState?.last_job_id || "").trim();
         if (!previousSyncJobId || previousSyncJobId === finishedJobId) {
-          this.showNotice(currentSyncStatus === "done" ? "测验同步完成，列表已刷新" : "测验同步失败");
+          this.showNotice(currentSyncStatus === "done" ? `${this.quizSyncStatusLabel()}，列表已刷新` : "测验同步失败");
         }
       }
     },
 
     async toggleQuizSortOrder() {
       this.filters.quizzes.sortOrder = this.filters.quizzes.sortOrder === "asc" ? "desc" : "asc";
-      await this.loadQuizzes();
+      await this.reloadQuizzesFromFirstPage();
     },
 
     async bindRepo() {
@@ -269,36 +342,52 @@ export function createAdminQuizzesModule() {
     },
 
     async loadQuizDetail(quizKey) {
-      this.quizDetailSideTab = "analytics";
+      const requestId = ++detailRequestId;
+      this.quizDetail = { quiz: {}, selected_quiz_version: {}, quiz_version_history: [], stats: {} };
+      this.resetQuizAnalyticsDetail();
       const [detail] = await Promise.all([
         this.api(`/api/admin/quizzes/${encodeURIComponent(quizKey)}`),
         this.loadQuizAnalyticsDetail(quizKey, { quiet: true, syncRoute: false }),
       ]);
+      if (requestId !== detailRequestId || this.route.name !== "quiz-detail" || this.route.params.quizKey !== quizKey) return;
       this.quizDetail = detail;
       await this.$nextTick();
       this.queueMathTypeset();
     },
 
-    quizDetailPanelVisible(tabId) {
-      const key = String(tabId || "").trim();
-      if (!key) return false;
-      if (this.isAdminCompactLayout) {
-        return this.adminCompactPanelVisible("quiz-detail", key);
-      }
-      return String(this.quizDetailSideTab || "analytics").trim() === key;
+    quizDetailTab() {
+      const tab = String(this.route?.query?.tab || "").trim();
+      return ["content", "analytics", "history"].includes(tab) ? tab : "content";
     },
 
-    setQuizDetailSideTab(tabId) {
-      const key = String(tabId || "").trim();
-      if (!["analytics", "history"].includes(key)) return;
-      this.quizDetailSideTab = key;
+    quizDetailPanelVisible(tabId) {
+      return this.quizDetailTab() === tabId;
+    },
+
+    async setQuizDetailTab(tabId) {
+      if (!["content", "analytics", "history"].includes(tabId)) return;
+      if (this.quizDetailTab() !== tabId) this.setRouteSearchParams({ ...this.route.query, tab: tabId }, { replace: false });
+      await this.$nextTick();
+      this.queueMathTypeset();
+    },
+
+    async handleQuizDetailTabKeydown(event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const tabs = ["content", "analytics", "history"];
+      const index = tabs.indexOf(this.quizDetailTab());
+      const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      await this.setQuizDetailTab(tabs[next]);
+      document.getElementById(`quiz-detail-tab-${tabs[next]}`)?.focus();
     },
 
     async loadQuizVersion(versionId) {
-      this.quizDetail = await this.api(`/api/admin/quiz-versions/${versionId}`);
-      if (this.route.name === "quiz-detail" && this.isAdminCompactLayout) {
-        await this.setAdminCompactTab("quiz-detail", "content", { scroll: true });
-      }
+      const requestId = ++detailRequestId;
+      const quizKey = this.route.params.quizKey;
+      const detail = await this.api(`/api/admin/quiz-versions/${versionId}`);
+      if (requestId !== detailRequestId || this.route.name !== "quiz-detail" || this.route.params.quizKey !== quizKey) return;
+      this.quizDetail = detail;
+      await this.setQuizDetailTab("content");
       await this.$nextTick();
       this.queueMathTypeset();
     },

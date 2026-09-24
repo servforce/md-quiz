@@ -1682,12 +1682,14 @@ def _serialize_quiz_analytics_detail(
 from .admin_assignment_routes import router as admin_assignment_router
 from .admin_candidate_routes import router as admin_candidate_router
 from .admin_core_routes import router as admin_core_router
+from .admin_dashboard_routes import router as admin_dashboard_router
 from .admin_job_description_routes import router as admin_job_description_router
 from .admin_monitor_routes import router as admin_monitor_router
 from .admin_quiz_analytics_routes import router as admin_quiz_analytics_router
 from .admin_quiz_routes import router as admin_quiz_router
 
 router.include_router(admin_core_router)
+router.include_router(admin_dashboard_router)
 router.include_router(admin_quiz_router)
 router.include_router(admin_quiz_analytics_router)
 router.include_router(admin_candidate_router)

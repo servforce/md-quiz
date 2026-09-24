@@ -78,14 +78,6 @@ export const ADMIN_COMPACT_TAB_CONFIG = {
       { id: "repo", label: "仓库绑定" },
     ],
   },
-  "quiz-detail": {
-    defaultTab: "analytics",
-    tabs: [
-      { id: "analytics", label: "测验分析" },
-      { id: "content", label: "测验内容" },
-      { id: "history", label: "版本历史" },
-    ],
-  },
   candidates: {
     defaultTab: "list",
     tabs: [
@@ -131,8 +123,8 @@ export const ADMIN_COMPACT_TAB_CONFIG = {
   status: {
     defaultTab: "summary",
     tabs: [
-      { id: "summary", label: "状态摘要" },
-      { id: "config", label: "阈值配置" },
+      { id: "summary", label: "每日统计" },
+      { id: "config", label: "接入与阈值" },
     ],
   },
   mcp: {

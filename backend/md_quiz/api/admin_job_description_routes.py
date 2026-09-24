@@ -30,6 +30,10 @@ class JobDescriptionPayload(BaseModel):
     related_quizzes: list[str] = Field(default_factory=list)
 
 
+class JobDescriptionPreviewPayload(BaseModel):
+    content_md: str = ""
+
+
 def _normalize_job_description_status(value: str, *, default: str = "draft") -> str:
     status_key = str(value or "").strip().lower() or default
     if status_key not in _JOB_DESCRIPTION_STATUS_LABELS:
@@ -165,6 +169,12 @@ def create_job_description(payload: JobDescriptionPayload, request: Request):
         related_quizzes=_normalize_related_quizzes(payload.related_quizzes),
     )
     return _serialize_job_description(item, include_content=True)
+
+
+@router.post("/job-descriptions/preview")
+def preview_job_description(payload: JobDescriptionPreviewPayload, request: Request):
+    shared._require_admin(request)
+    return {"content_html": render_markdown_html(payload.content_md)}
 
 
 @router.get("/job-descriptions/{job_description_id}")

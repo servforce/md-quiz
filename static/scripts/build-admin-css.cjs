@@ -63,7 +63,12 @@ async function buildTarget({ name, inputs, outputPath }) {
 }
 
 async function build() {
-  for (const target of targets) {
+  const args = process.argv.slice(2);
+  const selected = args.length === 0 ? "all" : args.length === 2 && args[0] === "--target" ? args[1] : "";
+  if (!["all", "admin", "public"].includes(selected)) {
+    throw new Error("Usage: build-admin-css.cjs [--target admin|public|all]");
+  }
+  for (const target of targets.filter((item) => selected === "all" || item.name === selected)) {
     await buildTarget(target);
   }
 }

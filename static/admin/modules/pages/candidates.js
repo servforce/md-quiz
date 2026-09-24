@@ -225,6 +225,7 @@ export function createAdminCandidatesModule() {
     async saveCandidateResumeEvaluation() {
       const candidateId = Number(this.candidateDetail?.candidate?.id || 0);
       if (!candidateId || this.candidateResumeEvaluationForm?.saving) return;
+      const requestId = this.candidateDetailRequestId;
       let jobMatchScore = null;
       try {
         jobMatchScore = this.normalizeCandidateResumeJobMatchScoreInput();
@@ -237,7 +238,7 @@ export function createAdminCandidatesModule() {
         saving: true,
       };
       try {
-        this.candidateDetail = await this.api(`/api/admin/candidates/${candidateId}/resume/evaluation`, {
+        const data = await this.api(`/api/admin/candidates/${candidateId}/resume/evaluation`, {
           method: "POST",
           body: JSON.stringify({
             evaluation: String(this.candidateResumeEvaluationForm?.evaluation || ""),
@@ -245,13 +246,21 @@ export function createAdminCandidatesModule() {
           }),
           headers: { "Content-Type": "application/json" },
         });
+        if (!data || requestId !== this.candidateDetailRequestId
+            || Number(this.candidateDetail?.candidate?.id) !== candidateId) return;
+        this.candidateDetail = data;
         this.syncCandidateResumeEvaluationForm();
-        this.showNotice("简历评价已保存");
+        this.showNotice("简历评价已修订");
+      } catch (_error) {
+        // 统一 API 已展示错误，保留编辑中的正文以便重试。
       } finally {
-        this.candidateResumeEvaluationForm = {
-          ...this.candidateResumeEvaluationForm,
-          saving: false,
-        };
+        if (requestId === this.candidateDetailRequestId
+            && Number(this.candidateDetail?.candidate?.id) === candidateId) {
+          this.candidateResumeEvaluationForm = {
+            ...this.candidateResumeEvaluationForm,
+            saving: false,
+          };
+        }
       }
     },
 
@@ -416,20 +425,21 @@ export function createAdminCandidatesModule() {
     },
 
     candidateResumeAdminSummaries() {
-      const items = [];
-      const adminItems = Array.isArray(this.candidateDetail?.profile?.admin_evaluations)
-        ? this.candidateDetail.profile.admin_evaluations
-        : [];
-      adminItems.slice(0, 3).forEach((item) => {
-        const text = String(item?.text || "").trim();
-        if (!text) return;
-        items.push({
-          label: "面试评价",
-          text,
-          meta: String(item?.at_display || item?.at || "").trim(),
-        });
-      });
-      return items;
+      const items = this.candidateInterviewEvaluations();
+      return this.candidateEvaluationsExpanded ? items : items.slice(0, 3);
+    },
+
+    candidateInterviewEvaluations() {
+      const items = this.candidateDetail?.profile?.admin_evaluations;
+      if (!Array.isArray(items)) return [];
+      return items.map((item, index) => ({
+        key: index,
+        label: "面试记录",
+        text: String(item?.text || "").trim(),
+        meta: String(item?.at_display || item?.at || "").trim(),
+        timestamp: Date.parse(item?.at || "") || 0,
+      })).filter((item) => item.text)
+        .sort((left, right) => right.timestamp - left.timestamp || right.key - left.key);
     },
 
     candidateResumeMainHasStructuredContent() {
@@ -475,6 +485,11 @@ export function createAdminCandidatesModule() {
 
     candidateAttemptTitle(summary) {
       return String(summary.quiz_name || summary.quiz_key || "").trim();
+    },
+
+    candidateAttemptUrl(summary) {
+      const token = String(summary?.token || "").trim();
+      return token ? `/admin/attempt/${encodeURIComponent(token)}` : "";
     },
 
     candidateAttemptHasSummary(summary) {
@@ -752,12 +767,16 @@ export function createAdminCandidatesModule() {
       if (nextPage === this.currentCandidatesPage()) {
         return;
       }
+      this.candidates.page = nextPage;
+      this.syncAdminListRoute({ replace: false });
       await this.loadCandidates({ page: nextPage });
     },
 
-    async reloadCandidatesFromFirstPage() {
+    async reloadCandidatesFromFirstPage({ replace = false } = {}) {
       window.clearTimeout(this.candidatesFilterTimer);
       this.candidatesFilterTimer = null;
+      this.candidates.page = 1;
+      this.syncAdminListRoute({ replace });
       await this.loadCandidates({ page: 1 });
     },
 
@@ -765,20 +784,22 @@ export function createAdminCandidatesModule() {
       window.clearTimeout(this.candidatesFilterTimer);
       this.candidatesFilterTimer = window.setTimeout(() => {
         this.candidatesFilterTimer = null;
-        this.loadCandidates({ page: 1 });
+        this.reloadCandidatesFromFirstPage({ replace: true });
       }, 220);
     },
 
     async loadCandidates({ quiet = false, page = null } = {}) {
-      await this.loadCandidateJobDescriptionOptions({ quiet: true });
+      const requestId = ++this.candidateListRequestId;
       const query = new URLSearchParams();
       const nextPage = this.normalizeCandidatesPage(page, this.candidates?.page || 1);
       query.set("page", String(nextPage));
       if (this.filters.candidates.q) query.set("q", this.filters.candidates.q);
       if (this.filters.candidates.created_from) query.set("created_from", this.filters.candidates.created_from);
       if (this.filters.candidates.created_to) query.set("created_to", this.filters.candidates.created_to);
+      await this.loadCandidateJobDescriptionOptions({ quiet: true });
+      if (requestId !== this.candidateListRequestId) return;
       const data = await this.api(`/api/admin/candidates?${query.toString()}`, { quiet });
-      if (!data) return;
+      if (!data || requestId !== this.candidateListRequestId) return;
       this.candidates = {
         ...(this.candidates || {}),
         items: Array.isArray(data?.items) ? data.items : [],
@@ -875,10 +896,16 @@ export function createAdminCandidatesModule() {
     },
 
     async loadCandidateDetail(candidateId) {
+      const requestId = ++this.candidateDetailRequestId;
       await this.loadCandidateJobDescriptionOptions({ quiet: true });
-      this.candidateDetail = await this.api(`/api/admin/candidates/${candidateId}`);
+      if (requestId !== this.candidateDetailRequestId) return;
+      const data = await this.api(`/api/admin/candidates/${candidateId}`);
+      if (!data || requestId !== this.candidateDetailRequestId) return;
+      this.closeCandidateResumePreview();
+      this.candidateDetail = data;
       this.candidateJobDescriptionAddSelection = [];
       this.candidateEvaluation = "";
+      this.candidateEvaluationsExpanded = false;
       this.syncCandidateResumeEvaluationForm();
       if (!this.candidateResumeReparseState.busy) {
         this.resetCandidateResumeReparseState();
@@ -886,14 +913,71 @@ export function createAdminCandidatesModule() {
     },
 
     async saveCandidateEvaluation() {
-      const payload = { evaluation: this.candidateEvaluation };
-      this.candidateDetail = await this.api(`/api/admin/candidates/${this.candidateDetail.candidate.id}/evaluation`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" },
-      });
-      this.candidateEvaluation = "";
-      this.showNotice("面试评价已保存");
+      if (this.candidateEvaluationSaving) return;
+      const candidateId = Number(this.candidateDetail?.candidate?.id || 0);
+      const evaluation = String(this.candidateEvaluation || "").trim();
+      if (!candidateId || !evaluation) {
+        this.showNotice("请填写面试记录");
+        return;
+      }
+      const requestId = this.candidateDetailRequestId;
+      this.candidateEvaluationSaving = true;
+      try {
+        const data = await this.api(`/api/admin/candidates/${candidateId}/evaluation`, {
+          method: "POST",
+          body: JSON.stringify({ evaluation }),
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!data || requestId !== this.candidateDetailRequestId) return;
+        this.candidateDetail = data;
+        this.candidateEvaluation = "";
+        this.candidateEvaluationsExpanded = false;
+        this.showNotice("面试记录已追加");
+      } catch (_error) {
+        // 追加失败保留正文，避免误认为记录已保存。
+      } finally {
+        this.candidateEvaluationSaving = false;
+      }
+    },
+
+    candidateResumeCanPreview() {
+      const candidate = this.candidateDetail?.candidate || {};
+      const mime = String(candidate.resume_mime || "").toLowerCase().split(";")[0];
+      const filename = String(candidate.resume_filename || "").toLowerCase();
+      return Boolean(candidate.id && candidate.resume_filename && (
+        ["image/png", "image/jpeg", "image/webp", "image/bmp"].includes(mime)
+        || /\.(png|jpe?g|webp|bmp)$/.test(filename)
+      ));
+    },
+
+    async openCandidateResumePreview() {
+      if (!this.candidateResumeCanPreview()) return;
+      this.candidateResumePreview = {
+        url: `/api/admin/candidates/${this.candidateDetail.candidate.id}/resume?preview=true`,
+        loading: true,
+        error: "",
+      };
+      await this.$nextTick();
+      if (!this.candidateResumePreview.url || this.route.name !== "candidate-detail") return;
+      const dialog = this.$refs?.candidateResumePreviewDialog;
+      if (dialog && !dialog.open) dialog.showModal();
+    },
+
+    closeCandidateResumePreview() {
+      const dialog = this.$refs?.candidateResumePreviewDialog;
+      if (dialog?.open) dialog.close();
+      this.candidateResumePreview = { url: "", loading: false, error: "" };
+    },
+
+    candidateResumePreviewLoaded(event) {
+      if (event.target.getAttribute("src") !== this.candidateResumePreview.url) return;
+      this.candidateResumePreview.loading = false;
+    },
+
+    candidateResumePreviewFailed(event) {
+      if (event.target.getAttribute("src") !== this.candidateResumePreview.url) return;
+      this.candidateResumePreview.loading = false;
+      this.candidateResumePreview.error = "无法预览此图片，请下载文件查看；若登录已过期，请重新登录。";
     },
 
     downloadCandidateResume() {

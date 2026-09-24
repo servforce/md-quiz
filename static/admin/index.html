@@ -6,193 +6,195 @@
     <title>MD Quiz Admin</title>
     <link rel="icon" type="image/png" href="/static/logo.png" />
     <link href="/static/assets/css/material-symbols.css" rel="stylesheet" />
-    <link href="/static/admin.css?v=20260723-assignment-name-full" rel="stylesheet" />
+    <link href="/static/admin.css?v=20260907-navigation-layout" rel="stylesheet" />
     <script defer src="/static/assets/js/math-render.js"></script>
     <script defer src="/static/assets/js/vendor/mathjax/tex-svg.js"></script>
     <script defer src="/static/vendor/lightweight-charts/lightweight-charts.standalone.production.js"></script>
     <script type="module" src="/static/admin/app.js"></script>
     <script defer src="/static/assets/js/alpine.min.js"></script>
   </head>
-  <body
-    x-data="adminApp()"
-    x-init="boot()"
-    :class="{
-      'admin-body--job-descriptions': route.name === 'job-descriptions',
-      'admin-body--candidates': route.name === 'candidates'
-    }"
-    class="min-h-screen bg-transparent text-slate-900"
-  >
-    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      <div class="absolute -left-28 top-0 h-72 w-72 rounded-full bg-blue-500/18 blur-3xl"></div>
-      <div class="absolute right-0 top-12 h-80 w-80 rounded-full bg-emerald-500/16 blur-3xl"></div>
-      <div class="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-sky-300/18 blur-3xl"></div>
-    </div>
-
-    <div
-      x-cloak
-      x-show="booting"
-      class="fixed inset-0 z-50 grid place-items-center bg-white/55 backdrop-blur-sm"
-    >
-      <div class="rounded-3xl border border-white/70 bg-white/85 px-6 py-4 shadow-[var(--admin-shadow)]">
-        <div class="flex items-center gap-3">
-          <span class="material-symbols-rounded animate-spin text-blue-600">progress_activity</span>
-          <span class="text-sm font-medium text-slate-700">后台正在加载</span>
+  <body x-data="adminApp()" x-init="boot()" class="min-h-dvh text-slate-900">
+    <div x-cloak x-show="booting || bootError" class="fixed inset-0 z-50 grid place-items-center bg-slate-50/90 p-4" :role="bootError ? 'alert' : 'status'">
+      <div class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <span x-show="!bootError" class="material-symbols-rounded animate-spin text-blue-600" aria-hidden="true">progress_activity</span>
+        <div class="max-w-sm">
+          <p class="text-sm font-medium text-slate-700" x-text="bootError ? '后台加载失败' : '后台正在加载'"></p>
+          <p x-show="bootError" x-text="bootError" class="mt-2 break-words text-sm text-rose-700"></p>
+          <button x-show="bootError" type="button" @click="window.location.reload()" class="mt-4 min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">重新加载</button>
         </div>
       </div>
     </div>
 
-    <main class="min-h-screen p-3 sm:p-5 xl:p-6" x-cloak>
-      <section x-show="!session.authenticated" x-cloak>
+    <main class="min-h-dvh" x-cloak>
+      <section x-show="!session.authenticated" x-cloak class="p-4 sm:p-6">
         <div x-ref="loginMount"></div>
       </section>
 
-      <section x-show="session.authenticated" x-cloak class="admin-shell mx-auto flex max-w-[1700px] gap-4">
-          <aside class="admin-shell__aside hidden w-64 shrink-0 md:block">
-            <div class="admin-surface admin-sidebar-surface sticky top-6 rounded-3xl border border-white/70 bg-white/78 p-4 shadow-[var(--admin-shadow)] backdrop-blur-xl">
-              <div class="flex items-center gap-3 border-b border-blue-100/70 px-2 pb-4 pt-1">
-                <img
-                  src="/static/logo.png"
-                  alt="MD Quiz"
-                  class="h-11 w-11 shrink-0 rounded-xl bg-blue-50 object-contain p-1.5"
-                />
-                <div>
-                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">MD Quiz</div>
-                  <div class="text-lg font-semibold tracking-[-0.02em] text-slate-900">Admin Shell</div>
-                </div>
-              </div>
-              <nav class="mt-3 space-y-1">
-                <template x-for="item in navItems" :key="item.href">
-                  <button
-                    type="button"
-                    @click="go(item.href)"
-                    :class="isPrimaryNavItemActive(item.href) ? 'bg-blue-50 text-blue-700 before:bg-blue-600' : 'text-slate-600 before:bg-transparent hover:bg-blue-50/70 hover:text-blue-700'"
-                    class="admin-sidebar-nav__item relative flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-medium transition before:absolute before:left-0 before:bottom-2 before:top-2 before:w-1 before:rounded-full"
-                  >
-                    <span class="flex items-center gap-3">
-                      <template x-if="item.iconKind === 'mcp'">
-                        <svg viewBox="0 0 195 195" aria-hidden="true" class="shrink-0" style="width: 24px; height: 24px;" fill="none">
+      <section
+        x-show="session.authenticated"
+        x-cloak
+        class="admin-shell grid min-h-dvh items-start"
+        :class="isAdminSidebarCollapsed ? 'md:grid-cols-[72px_minmax(0,1fr)]' : 'md:grid-cols-[232px_minmax(0,1fr)]'"
+      >
+        <aside class="admin-sidebar sticky top-0 hidden h-dvh min-h-0 flex-col border-r md:flex" aria-label="后台导航">
+          <a href="/admin/quizzes" @click="go('/admin/quizzes', $event)" class="flex h-[72px] shrink-0 items-center gap-3 border-b border-slate-200/70 px-5" aria-label="MD Quiz 测验首页">
+            <img src="/static/logo.png" alt="" class="h-8 w-8 shrink-0 object-contain" />
+            <div x-show="!isAdminSidebarCollapsed" class="min-w-0 whitespace-nowrap">
+              <div class="text-base font-semibold tracking-tight text-slate-900">MD Quiz</div>
+              <div class="mt-0.5 text-[11px] text-slate-500">测评管理工作台</div>
+            </div>
+          </a>
+          <nav id="admin-sidebar-nav" class="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-5" aria-label="后台主导航">
+            <template x-for="item in navItems" :key="item.href">
+              <a
+                :href="adminNavigationHref(item)"
+                @click="go(adminNavigationHref(item), $event)"
+                :aria-label="item.label"
+                :title="item.label"
+                :aria-current="isPrimaryNavItemActive(item.href) ? 'page' : null"
+                :class="isAdminSidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3'"
+                class="admin-nav-item flex min-h-11 w-full items-center rounded-lg border border-transparent text-sm font-medium"
+              >
+                <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center" aria-hidden="true">
+                  <template x-if="item.iconKind === 'mcp'"><svg viewBox="0 0 195 195" aria-hidden="true" class="h-5 w-5 shrink-0" fill="none">
                           <path d="M25 97.8528L92.8823 29.9706C102.255 20.598 117.451 20.598 126.823 29.9706C136.196 39.3431 136.196 54.5391 126.823 63.9117L75.5581 115.177" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
                           <path d="M76.2653 114.47L126.823 63.9117C136.196 54.5391 151.392 54.5391 160.765 63.9117L161.118 64.2652C170.491 73.6378 170.491 88.8338 161.118 98.2063L99.7248 159.6C96.6006 162.724 96.6006 167.789 99.7248 170.913L112.331 183.52" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
                           <path d="M109.853 46.9411L59.6482 97.1457C50.2757 106.518 50.2757 121.714 59.6482 131.087C69.0208 140.459 84.2168 140.459 93.5894 131.087L143.794 80.8822" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
-                        </svg>
-                      </template>
-                      <template x-if="item.iconKind !== 'mcp'">
-                        <span class="material-symbols-rounded text-[20px]" x-text="item.icon"></span>
-                      </template>
-                      <span x-text="item.label"></span>
-                    </span>
-                    <span class="text-xs opacity-70" x-text="isPrimaryNavItemActive(item.href) ? '当前' : ''"></span>
-                  </button>
-                </template>
-              </nav>
-              <button
-                type="button"
-                @click="logout"
-                class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-              >
-                <span class="material-symbols-rounded text-base">logout</span>
-                退出登录
-              </button>
-            </div>
-          </aside>
+                        </svg></template>
+                  <template x-if="item.iconKind !== 'mcp'">
+                    <span class="material-symbols-rounded text-[20px]" x-text="item.icon"></span>
+                  </template>
+                </span>
+                <span x-show="!isAdminSidebarCollapsed" class="truncate" x-text="item.label"></span>
+              </a>
+            </template>
+          </nav>
+          <div class="shrink-0 border-t border-slate-200/70 p-3">
+            <button
+              type="button"
+              @click="toggleAdminSidebar()"
+              :aria-label="isAdminSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+              :title="isAdminSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+              :aria-expanded="String(!isAdminSidebarCollapsed)"
+              aria-controls="admin-sidebar-nav"
+              :class="isAdminSidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3'"
+              class="admin-nav-item flex min-h-11 w-full items-center rounded-lg text-sm"
+            >
+              <span class="material-symbols-rounded text-[20px]" aria-hidden="true" x-text="isAdminSidebarCollapsed ? 'left_panel_open' : 'left_panel_close'"></span>
+              <span x-show="!isAdminSidebarCollapsed">收起侧边栏</span>
+            </button>
+          </div>
+        </aside>
 
-          <div class="admin-shell__main min-w-0 flex-1">
-            <header class="admin-surface admin-header-surface mb-4 rounded-3xl border border-white/70 bg-white/76 px-4 py-4 shadow-[var(--admin-shadow)] backdrop-blur-xl sm:px-5">
-              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div class="min-w-0">
-                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" x-text="route.section"></div>
-                  <h1 class="mt-1 truncate text-3xl font-semibold tracking-[-0.04em] text-slate-900" x-text="route.title"></h1>
-                </div>
-                <div class="admin-header-meta flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                  <div class="admin-header-meta__pill rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5">
-                    <span class="admin-header-meta__label">当前用户：</span>
-                    <span class="font-semibold text-slate-900" x-text="session.username || 'admin'"></span>
-                  </div>
-                  <div class="admin-header-meta__pill rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5">
-                    <span class="admin-header-meta__label">系统状态：</span>
-                    <span class="font-semibold text-emerald-700" x-text="statusSummary.overall_level || 'ok'"></span>
-                  </div>
+        <div class="admin-shell__main min-w-0">
+          <div class="admin-topbar-shell sticky top-0 z-30">
+            <header class="admin-header flex h-[72px] min-w-0 items-center justify-between gap-3 border-b px-4 sm:px-5">
+              <div class="min-w-0">
+                <nav x-show="adminParentNavItem()" class="mb-1 flex items-center gap-1 text-xs text-slate-500" aria-label="面包屑">
+                  <a :href="adminBreadcrumbParent()?.href" @click="returnToAdminParent($event)" class="hover:text-blue-700" x-text="adminBreadcrumbParent()?.label"></a>
+                  <span class="material-symbols-rounded text-sm" aria-hidden="true">chevron_right</span>
+                </nav>
+                <div x-show="!adminParentNavItem()" class="mb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500" x-text="route.section"></div>
+                <h1 class="truncate text-xl font-semibold tracking-tight text-slate-900" :title="adminDetailTitle()" x-text="adminDetailTitle()"></h1>
+              </div>
+              <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+                <a
+                  href="/admin/status"
+                  @click="go('/admin/status', $event)"
+                  class="admin-health inline-flex min-h-9 items-center gap-2 rounded-full border px-2.5 text-xs font-medium sm:px-3"
+                  :data-level="statusSummary.overall_level || 'unknown'"
+                  :aria-label="'系统状态：' + adminSystemStatusLabel()"
+                  :title="'系统状态：' + adminSystemStatusLabel()"
+                >
+                  <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden="true"></span>
+                  <span class="hidden sm:inline" x-text="adminSystemStatusLabel()"></span>
+                  <span class="sm:hidden">状态</span>
+                </a>
+                <div class="relative" @click.outside="userMenuOpen = false" @focusout="if (!$el.contains($event.relatedTarget)) userMenuOpen = false" @keydown.escape.stop.prevent="closeAdminUserMenu()">
                   <button
-                    x-show="isAdminCompactLayout"
                     type="button"
-                    @click="logout"
-                    class="admin-header-meta__logout inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/88 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 md:hidden"
-                    aria-label="退出登录"
+                    x-ref="userMenuButton"
+                    @click="toggleAdminUserMenu()"
+                    @keydown.arrow-down.prevent="openAdminUserMenu()"
+                    :aria-expanded="String(userMenuOpen)"
+                    aria-controls="admin-user-menu"
+                    aria-label="用户菜单"
+                    class="admin-user-button inline-flex min-h-10 items-center gap-2 rounded-lg border border-transparent px-2 text-sm text-slate-600"
                   >
-                    <span class="material-symbols-rounded text-base">logout</span>
-                    <span class="admin-header-meta__logout-text">退出</span>
+                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700" aria-hidden="true" x-text="(session.username || 'A').slice(0, 1).toUpperCase()"></span>
+                    <span class="hidden max-w-32 truncate sm:inline" x-text="session.username || 'admin'"></span>
+                    <span class="material-symbols-rounded text-base" aria-hidden="true" x-text="userMenuOpen ? 'expand_less' : 'expand_more'"></span>
                   </button>
+                  <div id="admin-user-menu" x-show="userMenuOpen" x-cloak class="admin-user-panel absolute right-0 top-full mt-2 w-52 overflow-hidden rounded-xl border shadow-lg">
+                    <div class="border-b border-slate-100 px-4 py-3">
+                      <div class="text-xs text-slate-500">当前用户</div>
+                      <div class="mt-1 truncate text-sm font-medium text-slate-900" x-text="session.username || 'admin'"></div>
+                    </div>
+                    <button type="button" x-ref="userMenuLogout" @click="logout()" class="flex min-h-11 w-full items-center gap-2 px-4 py-3 text-sm text-rose-700 hover:bg-rose-50">
+                      <span class="material-symbols-rounded text-lg" aria-hidden="true">logout</span>
+                      退出登录
+                    </button>
+                  </div>
                 </div>
               </div>
             </header>
 
-            <div x-show="isAdminCompactLayout" x-cloak class="admin-mobile-nav-shell md:hidden">
-              <div class="admin-primary-nav">
-                <div
-                  class="admin-primary-nav__track"
-                  role="navigation"
-                  aria-label="后台主导航"
-                  :style="{ '--admin-primary-nav-columns': navItems.length }"
-                >
-                  <template x-for="item in navItems" :key="'compact-' + item.href">
-                    <button
-                      type="button"
-                      @click="go(item.href)"
-                      :aria-label="item.label"
-                      :title="item.label"
-                      :class="isPrimaryNavItemActive(item.href) ? 'admin-primary-nav__item--active' : 'admin-primary-nav__item--inactive'"
-                      class="admin-primary-nav__item"
-                    >
-                      <template x-if="item.iconKind === 'mcp'">
-                        <svg viewBox="0 0 195 195" aria-hidden="true" class="shrink-0" style="width: 24px; height: 24px;" fill="none">
+            <div x-show="isAdminCompactLayout" x-cloak class="admin-mobile-nav-shell border-b md:hidden">
+              <nav class="flex gap-1 overflow-x-auto px-2 py-2" aria-label="后台主导航">
+                <template x-for="item in navItems" :key="'compact-' + item.href">
+                  <a
+                    :href="adminNavigationHref(item)"
+                    @click="go(adminNavigationHref(item), $event)"
+                    :aria-label="item.label"
+                    :title="item.label"
+                    :aria-current="isPrimaryNavItemActive(item.href) ? 'page' : null"
+                    class="admin-nav-item flex min-h-12 min-w-12 flex-1 flex-col items-center justify-center gap-1 rounded-lg border border-transparent px-1.5 py-1.5"
+                  >
+                    <template x-if="item.iconKind === 'mcp'"><svg viewBox="0 0 195 195" aria-hidden="true" class="h-5 w-5 shrink-0" fill="none">
                           <path d="M25 97.8528L92.8823 29.9706C102.255 20.598 117.451 20.598 126.823 29.9706C136.196 39.3431 136.196 54.5391 126.823 63.9117L75.5581 115.177" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
                           <path d="M76.2653 114.47L126.823 63.9117C136.196 54.5391 151.392 54.5391 160.765 63.9117L161.118 64.2652C170.491 73.6378 170.491 88.8338 161.118 98.2063L99.7248 159.6C96.6006 162.724 96.6006 167.789 99.7248 170.913L112.331 183.52" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
                           <path d="M109.853 46.9411L59.6482 97.1457C50.2757 106.518 50.2757 121.714 59.6482 131.087C69.0208 140.459 84.2168 140.459 93.5894 131.087L143.794 80.8822" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
-                        </svg>
-                      </template>
-                      <template x-if="item.iconKind !== 'mcp'">
-                        <span class="material-symbols-rounded text-[20px]" x-text="item.icon"></span>
-                      </template>
-                    </button>
-                  </template>
-                </div>
-              </div>
-              <div
-                x-show="shouldShowAdminCompactTabs(route.name)"
-                x-cloak
-                :data-admin-compact-tabs="route.name"
-                class="admin-compact-tabs"
-              >
-                <div
-                  class="admin-compact-tabs__track"
-                  role="tablist"
-                  :aria-label="`${route.title || '当前页面'}内容切换`"
-                >
-                  <template x-for="tab in adminCompactTabs(route.name)" :key="`${route.name || 'route'}-${tab.id}`">
-                    <button
-                      type="button"
-                      role="tab"
-                      @click="setAdminCompactTab(route.name, tab.id)"
-                      :class="adminCompactTab(route.name) === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
-                      :aria-selected="String(adminCompactTab(route.name) === tab.id)"
-                      class="admin-compact-tab"
-                      x-text="tab.label"
-                    ></button>
-                  </template>
-                </div>
-              </div>
-            </div>
-
-            <div x-ref="pageMount" class="admin-page-mount"></div>
-
-            <div x-show="(notices || []).length" class="pointer-events-none fixed bottom-6 left-6 right-6 z-40 overflow-hidden">
-              <div class="flex justify-end gap-3 overflow-hidden">
-                <template x-for="item in notices" :key="item.id">
-                  <div class="pointer-events-auto max-w-md shrink-0 rounded-xl border border-slate-200 bg-white/95 px-5 py-4 text-sm text-slate-700 shadow-[var(--admin-shadow)] backdrop-blur-xl" x-text="item.message"></div>
+                        </svg></template>
+                    <template x-if="item.iconKind !== 'mcp'">
+                      <span class="material-symbols-rounded text-[20px]" aria-hidden="true" x-text="item.icon"></span>
+                    </template>
+                    <span class="whitespace-nowrap text-[10px] font-medium" x-text="item.shortLabel || item.label"></span>
+                  </a>
                 </template>
+              </nav>
+              <div x-show="shouldShowAdminCompactTabs(route.name)" x-cloak :data-admin-compact-tabs="route.name" class="admin-compact-tabs border-t border-slate-100 px-3 py-1.5">
+                <div class="admin-compact-tabs__track" role="tablist" :aria-label="`${route.title || '当前页面'}内容切换`">
+                  <template x-for="tab in adminCompactTabs(route.name)" :key="`${route.name || 'route'}-${tab.id}`">
+                    <button type="button" role="tab" @click="setAdminCompactTab(route.name, tab.id)" :class="adminCompactTab(route.name) === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'" :aria-selected="String(adminCompactTab(route.name) === tab.id)" class="admin-compact-tab" x-text="tab.label"></button>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
+
+          <dialog x-ref="jobDescriptionUnsavedDialog" @cancel.prevent="resolveJobDescriptionTransition('continue')" @close="resolveJobDescriptionTransition('continue')" aria-labelledby="job-unsaved-title" aria-describedby="job-unsaved-description" class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl border border-slate-200 bg-white p-5 text-slate-900 shadow-xl backdrop:bg-slate-950/40">
+            <h2 id="job-unsaved-title" class="text-lg font-semibold">职位有未保存的更改</h2>
+            <p x-show="jobDescriptionPendingTransition?.error" x-text="jobDescriptionPendingTransition?.error" role="alert" class="mt-2 text-sm text-rose-700"></p>
+            <p id="job-unsaved-description" class="mt-2 text-sm leading-6 text-slate-600">选择保存后继续，或放弃这次修改。继续编辑会保留当前内容。</p>
+            <div class="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" autofocus @click="resolveJobDescriptionTransition('continue')" :disabled="Boolean(jobDescriptionOperation)" class="min-h-11 rounded-lg border border-slate-200 px-4 py-2 text-sm disabled:opacity-50">继续编辑</button>
+              <button type="button" @click="resolveJobDescriptionTransition('discard')" :disabled="Boolean(jobDescriptionOperation)" class="min-h-11 rounded-lg border border-rose-200 px-4 py-2 text-sm text-rose-700 disabled:opacity-50">放弃更改</button>
+              <button type="button" @click="resolveJobDescriptionTransition('save')" :disabled="Boolean(jobDescriptionOperation)" class="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" x-text="jobDescriptionOperation === 'saving' ? '保存中…' : '保存后继续'"></button>
+            </div>
+          </dialog>
+
+          <div x-show="error" x-cloak role="alert" class="m-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:m-4 xl:m-5">
+            <p x-text="error"></p>
+            <button type="button" @click="handleRoute(route.path, { replace: true, search: route.search })" :disabled="adminRouteLoading" class="min-h-11 rounded-lg border border-rose-200 bg-white px-4 py-2 font-semibold disabled:opacity-50">重新加载页面</button>
+          </div>
+          <div x-ref="pageMount" class="admin-page-mount min-w-0 p-3 sm:p-4 xl:p-5"></div>
+
+          <div x-show="(notices || []).length" class="pointer-events-none fixed bottom-4 left-4 right-4 z-40 flex flex-col items-end gap-2" role="status" aria-live="polite">
+            <template x-for="item in notices" :key="item.id">
+              <div class="pointer-events-auto max-w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-lg sm:max-w-md" x-text="item.message"></div>
+            </template>
+          </div>
+        </div>
       </section>
     </main>
   </body>

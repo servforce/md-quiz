@@ -1,4 +1,4 @@
-<div x-show="route.name === 'mcp'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+<div x-show="route.name === 'mcp'" class="admin-mobile-pane-grid grid gap-4 xl:items-start xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div
               x-show="shouldShowAdminCompactTabs('mcp')"
               x-cloak
@@ -22,7 +22,7 @@
 
             <section
               x-show="adminCompactPanelVisible('mcp', 'overview')"
-              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-xl p-4 sm:p-5"
             >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -32,17 +32,17 @@
                 <div
                   class="rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em]"
                   :class="mcpInfo().enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600'"
-                  x-text="mcpInfo().enabled ? 'Enabled' : 'Disabled'"
+                  x-text="mcpInfo().enabled ? '已启用' : '未启用'"
                 ></div>
               </div>
 
-              <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/78">
+              <div class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/78">
                 <div class="grid gap-0 divide-y divide-slate-200 sm:grid-cols-[180px_minmax(0,1fr)] sm:divide-y-0 sm:divide-x">
                   <div class="bg-white/72 px-4 py-4">
                     <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">传输方式</div>
                     <div class="mt-2 text-lg font-semibold text-slate-900" x-text="mcpInfo().transport || 'streamable-http'"></div>
                   </div>
-                  <div class="px-4 py-4 text-sm leading-6 text-slate-600">当前规划固定为远程 HTTP MCP，不复用后台登录态。</div>
+                  <div class="px-4 py-4 text-sm leading-6 text-slate-600">通过远程 HTTP 接入，使用独立的 Bearer Token 鉴权。</div>
                 </div>
                 <div class="grid gap-0 border-t border-slate-200 divide-y divide-slate-200 sm:grid-cols-[180px_minmax(0,1fr)] sm:divide-y-0 sm:divide-x">
                   <div class="bg-white/72 px-4 py-4">
@@ -105,12 +105,19 @@
                 </div>
               </div>
 
-              <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white/78">
+              <div class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white/78">
                 <div class="border-b border-slate-200 px-4 py-4">
-                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">客户端配置</div>
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <label class="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-700">客户端配置
+                      <select x-model="mcpSelectedClient" class="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm">
+                        <template x-for="client in mcpClientConfigs()" :key="client.key"><option :value="client.key" x-text="client.label"></option></template>
+                      </select>
+                    </label>
+                    <button type="button" @click="copyMcpClientConfig" class="min-h-11 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-medium text-blue-700">复制所选配置</button>
+                  </div>
                 </div>
                 <div class="divide-y divide-slate-200">
-                  <template x-for="client in mcpClientConfigs()" :key="client.key">
+                  <template x-for="client in [selectedMcpClient()]" :key="client.key">
                     <section class="px-4 py-4">
                       <div class="flex flex-wrap items-start justify-between gap-3">
                         <div class="flex min-w-0 items-start gap-3">
@@ -132,7 +139,7 @@
                 </div>
               </div>
 
-              <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white/78">
+              <div class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white/78">
                 <div class="border-b border-slate-200 px-4 py-4">
                   <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">典型流程</div>
                 </div>
@@ -146,7 +153,7 @@
 
             <section
               x-show="adminCompactPanelVisible('mcp', 'capabilities')"
-              class="admin-surface admin-right-pane rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface admin-right-pane rounded-xl p-4 sm:p-5"
             >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">能力范围与安全规则</h2>
               <div class="admin-right-pane__body">
@@ -168,7 +175,7 @@
                   </template>
                 </div>
 
-                <div class="mt-5 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/80">
+                <div class="mt-4 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/80">
                   <div class="border-b border-amber-200 px-4 py-4">
                     <div class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">安全规则</div>
                   </div>

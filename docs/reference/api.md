@@ -52,9 +52,19 @@
 
 返回后台入口导航与概览卡片。
 
+### `GET /api/admin/dashboard`
+
+返回 `generated_at`、`window`、`unhandled`、`completed`、`failed_jobs`。后三项各含全量 `total` 和最多 6 条 `items`，条目提供管理页面 `href`。
+
+- `tz_offset_minutes` 为浏览器时区相对 UTC 的分钟偏移，范围 `-720..840`，默认 `0`；`window` 给出含今天的近七个自然日及起止时间。
+- `unhandled` 包含所有已完成且未处理答卷，不受近七天限制。`completed` 和 `failed_jobs` 按实际 `finished_at` 过滤；空结束时间不计入这两项。
+- 历史答卷保留已软删除候选人，条目通过 `candidate_deleted` 标识。失败任务不返回任务参数或原始错误。
+
 ### `GET /api/admin/quizzes`
 
 返回测验列表、分页信息、实例级仓库绑定信息与当前同步状态。
+
+可传 `public_invite=enabled|disabled` 筛选实际公开邀约状态，省略或空字符串表示全部。该条件与搜索一起在分页前生效，`total`、`total_pages` 和 `filters.public_invite` 对应筛选结果；兼容入口 `/api/admin/exams` 使用同一约定。
 
 ### `GET /api/admin/quizzes/options`
 
@@ -198,6 +208,8 @@
 
 下载候选人简历。
 
+传 `preview=true` 时，服务端验证实际文件内容，仅 PNG、JPEG、WebP、BMP 图片可内嵌预览；返回真实图片 MIME、`Content-Disposition: inline`、`Cache-Control: no-store` 与 `X-Content-Type-Options: nosniff`。不支持或损坏的图片返回 `415`，未登录返回 `401`，候选人或文件不存在返回 `404`。两种模式均保留安全的 UTF-8 文件名；默认下载行为不变。
+
 ### `POST /api/admin/candidates/{candidate_id}/resume/reparse`
 
 上传新简历并重新解析。
@@ -217,6 +229,10 @@
 ### `POST /api/admin/job-descriptions`
 
 创建手动职位。请求体可传 `related_quizzes`，内容为测验 `quiz_key` 数组。
+
+### `POST /api/admin/job-descriptions/preview`
+
+请求 `{ "content_md": "当前草稿" }`，返回 `{ "content_html": "…" }`。要求管理员登录，复用职位保存时的 Markdown 渲染与清洗，不保存职位或修改时间。
 
 ### `PUT /api/admin/job-descriptions/{job_description_id}`
 
@@ -277,6 +293,8 @@
 ### `GET /api/admin/logs`
 
 返回系统日志列表、分类计数，以及近 N 天的分类趋势序列。
+
+`page`、`limit` 控制分页；纯数字 `q` 匹配完整日志编号，其他文字匹配操作者的字面子串（不区分大小写，`%`、`_` 不作通配符），不搜索原始上下文字段。`category` 可为 `candidate`、`quiz`、`grading`、`assignment`、`system`，省略或空字符串表示全部。筛选在分页前生效，返回对应的 `total`、`total_pages` 和 `filters`。分类总计与近 N 天趋势保留全局口径，不随列表筛选变化。
 
 日志条目保留 `at`/`at_display` 作为单点时间；当条目包含完整起止时间时，会额外返回
 `started_at`、`started_at_display`、`finished_at`、`finished_at_display`、`duration_display` 和

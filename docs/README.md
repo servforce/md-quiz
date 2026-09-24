@@ -38,6 +38,8 @@
 
 - [UI 主题覆盖](ui/theme.md)
 - [Utility 落地规则](ui/utility-authoring.md)
+- [两项目 UI 差异分析与改造建议（2026-09-08）](ui/scisaga-comparison-review-20260908.md)
+- [管理端改造实施与验收（2026-09-09）](ui/admin-redesign-20260909.md)
 
 ## 建议阅读顺序
 

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import warnings
 from datetime import datetime, timezone
+from io import BytesIO
 from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, Request, Response, UploadFile, status
+from PIL import Image, UnidentifiedImageError
 
 from . import admin as shared
 
@@ -87,7 +90,7 @@ def _candidate_attempt_summaries(item: dict[str, Any]) -> list[dict[str, Any]]:
     return summaries
 
 
-def _resume_download_content_disposition(raw_filename: Any, candidate_id: int) -> str:
+def _resume_download_content_disposition(raw_filename: Any, candidate_id: int, *, inline: bool = False) -> str:
     filename = os.path.basename(str(raw_filename or "").replace("\\", "/").strip())
     filename = "".join(ch for ch in filename if ch >= " " and ch != "\x7f")
     if not filename:
@@ -96,7 +99,25 @@ def _resume_download_content_disposition(raw_filename: Any, candidate_id: int) -
     fallback = "".join(ch if 32 <= ord(ch) <= 126 and ch not in {'"', "\\", ";"} else "_" for ch in filename)
     fallback = fallback.strip(" .") or f"candidate_{candidate_id}_resume.bin"
     encoded = quote(filename, safe="")
-    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
+    disposition = "inline" if inline else "attachment"
+    return f'{disposition}; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
+
+
+def _resume_preview_mime(data: bytes) -> str:
+    image_mimes = {"JPEG": "image/jpeg", "PNG": "image/png", "BMP": "image/bmp", "WEBP": "image/webp"}
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(data)) as img:
+                mime = image_mimes.get(str(img.format or ""))
+                if not mime:
+                    raise shared.HTTPException(status_code=415, detail="该文件不支持图片预览，请下载查看")
+                img.verify()
+            with Image.open(BytesIO(data)) as img:
+                img.load()
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+        raise shared.HTTPException(status_code=415, detail="图片文件无效，请下载查看") from exc
+    return mime
 
 
 def _serialize_candidate_list_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -423,7 +444,7 @@ def update_candidate_resume_evaluation(
 
 
 @router.get("/candidates/{candidate_id}/resume")
-def download_candidate_resume(candidate_id: int, request: Request):
+def download_candidate_resume(candidate_id: int, request: Request, preview: bool = False):
     shared._require_admin(request)
     candidate = shared.deps.get_candidate(candidate_id)
     if not candidate:
@@ -435,12 +456,18 @@ def download_candidate_resume(candidate_id: int, request: Request):
     if not isinstance(data, (bytes, bytearray)) or not data:
         raise shared.HTTPException(status_code=404, detail="简历不存在")
     mime = str(resume.get("resume_mime") or "").strip() or "application/octet-stream"
+    if preview:
+        mime = _resume_preview_mime(bytes(data))
     headers = {
         "Content-Disposition": _resume_download_content_disposition(
             resume.get("resume_filename"),
             candidate_id,
+            inline=preview,
         )
     }
+    if preview:
+        headers["Cache-Control"] = "no-store"
+        headers["X-Content-Type-Options"] = "nosniff"
     return Response(content=bytes(data), media_type=mime, headers=headers)
 
 

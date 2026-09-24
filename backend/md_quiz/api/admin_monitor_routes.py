@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Query, Request
 
@@ -19,14 +19,19 @@ def get_logs(
     limit: int = 20,
     days: int = Query(default=30, ge=7, le=120),
     tz_offset_minutes: int = Query(default=0, ge=-720, le=840),
+    q: str = "",
+    category: Literal["", "candidate", "quiz", "grading", "assignment", "system"] = "",
 ):
     shared._require_admin(request)
     page_size = max(1, min(100, int(limit or 20)))
-    total = int(shared.deps.count_operation_logs() or 0)
+    query = str(q or "").strip()
+    total = int(shared.deps.count_operation_logs(query=query or None, category=category or None) or 0)
     total_pages = max(1, (total + page_size - 1) // page_size)
     current_page = max(1, min(int(page or 1), total_pages))
     offset = (current_page - 1) * page_size
-    rows = shared.deps.list_operation_logs(limit=page_size, offset=offset)
+    rows = shared.deps.list_operation_logs(
+        limit=page_size, offset=offset, query=query or None, category=category or None,
+    )
     start_day, end_day, start_at, end_at, tz_offset_seconds = shared._resolve_log_trend_window(
         days=int(days or 30),
         tz_offset_minutes=int(tz_offset_minutes or 0),
@@ -42,6 +47,7 @@ def get_logs(
         "per_page": page_size,
         "total": total,
         "total_pages": total_pages,
+        "filters": {"q": query, "category": category},
         "counts": shared._normalize_log_category_counts(shared.deps.count_operation_logs_by_category()),
         "trend": shared._serialize_log_trend(trend_rows, start_day=start_day, end_day=end_day),
     }

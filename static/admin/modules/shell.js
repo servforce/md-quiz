@@ -1,31 +1,104 @@
 import { copyTextToClipboard, queueMathTypeset } from "/static/assets/js/shared/runtime.js";
 import { ADMIN_COMPACT_BREAKPOINT_QUERY, ADMIN_COMPACT_TAB_CONFIG } from "./constants.js";
 
+const ADMIN_SIDEBAR_STORAGE_KEY = "md-quiz-admin-sidebar-collapsed";
+
 export function createAdminShellModule() {
   return {
     async boot() {
-      this.initAdminCompactLayout();
-      window.addEventListener("popstate", () =>
-        this.handleRoute(location.pathname, { replace: true, search: location.search }),
-      );
-      await this.refreshSession();
-      if (this.session.authenticated) {
-        await this.loadBootstrap();
-        await this.handleRoute(location.pathname, { replace: true, search: location.search });
-      } else {
-        this.route = this.resolveRoute("/admin/login", "");
-        await this.renderCurrentRoute();
+      this.booting = true;
+      this.bootError = "";
+      try {
+        this.initAdminSidebar();
+        this.initAdminCompactLayout();
+        history.scrollRestoration = "manual";
+        if (!history.state?.admin?.entryId) this.rememberAdminScroll();
+        window.addEventListener("scroll", () => this.trackAdminScroll(), { passive: true });
+        window.addEventListener("popstate", () =>
+          this.handleRoute(location.pathname, { replace: true, search: location.search, fromPop: true }),
+        );
+        window.addEventListener("beforeunload", (event) => {
+          this.rememberAdminScroll();
+          if (!this.hasUnsavedJobDescriptionChanges?.()) return;
+          event.preventDefault();
+          event.returnValue = "";
+        });
+        document.addEventListener("keydown", (event) => this.handleAdminTabKeydown(event));
+        await this.refreshSession();
+        if (this.session.authenticated) {
+          await this.loadBootstrap();
+          await this.handleRoute(location.pathname, { replace: true, search: location.search });
+        } else {
+          this.route = this.resolveRoute("/admin/login", "");
+          await this.renderCurrentRoute();
+        }
+      } catch (error) {
+        this.bootError = error?.message || "请检查网络连接后重新加载。";
+      } finally {
+        this.booting = false;
       }
-      this.booting = false;
+    },
+
+    initAdminSidebar() {
+      try {
+        this.isAdminSidebarCollapsed = window.localStorage.getItem(ADMIN_SIDEBAR_STORAGE_KEY) === "true";
+      } catch (_error) {
+        // 浏览器禁用存储时，侧栏仍可在当前会话中切换。
+        this.isAdminSidebarCollapsed = false;
+      }
+    },
+
+    async toggleAdminSidebar() {
+      this.isAdminSidebarCollapsed = !this.isAdminSidebarCollapsed;
+      try {
+        window.localStorage.setItem(ADMIN_SIDEBAR_STORAGE_KEY, String(this.isAdminSidebarCollapsed));
+      } catch (_error) {
+        this.showNotice("浏览器未允许保存侧栏偏好，本次调整仍然生效");
+      }
+      await this.$nextTick();
+      this.updateAdminStickyLayoutState();
+    },
+
+    async openAdminUserMenu() {
+      this.userMenuOpen = true;
+      await this.$nextTick();
+      this.$refs.userMenuLogout?.focus();
+    },
+
+    closeAdminUserMenu() {
+      this.userMenuOpen = false;
+      this.$refs.userMenuButton?.focus();
+    },
+
+    toggleAdminUserMenu() {
+      if (this.userMenuOpen) {
+        this.closeAdminUserMenu();
+      } else {
+        this.openAdminUserMenu();
+      }
+    },
+
+    adminParentNavItem() {
+      const parentPaths = {
+        "quiz-detail": "/admin/quizzes",
+        "candidate-detail": "/admin/candidates",
+        "attempt-detail": "/admin/assignments",
+      };
+      return this.navItems.find((item) => item.href === parentPaths[this.route?.name]) || null;
+    },
+
+    adminSystemStatusLabel() {
+      return {
+        ok: "运行正常",
+        warn: "需要关注",
+        danger: "状态异常",
+        critical: "严重异常",
+      }[this.statusSummary?.overall_level] || "状态未知";
     },
 
     initAdminCompactLayout() {
       if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
         return;
-      }
-      if (!this.adminCompactScrollHandler) {
-        this.adminCompactScrollHandler = () => this.updateAdminStickyLayoutState();
-        window.addEventListener("scroll", this.adminCompactScrollHandler, { passive: true });
       }
       if (!this.adminRightStackResizeHandler) {
         this.adminRightStackResizeHandler = () => this.updateAdminRightStackStickyOffsets();
@@ -83,6 +156,7 @@ export function createAdminShellModule() {
 
     adminCompactTab(routeName) {
       const key = String(routeName || "").trim();
+      if (key === "status") return this.route.query?.tab === "config" ? "config" : "summary";
       const config = this.adminCompactTabConfig(key);
       if (!config) return "";
       this.ensureAdminCompactTab(key);
@@ -90,6 +164,7 @@ export function createAdminShellModule() {
     },
 
     adminCompactPanelVisible(routeName, tabId) {
+      if (routeName === "status") return this.adminCompactTab(routeName) === tabId;
       if (!this.isAdminCompactLayout || !this.adminCompactTabs(routeName).length) {
         return true;
       }
@@ -97,29 +172,55 @@ export function createAdminShellModule() {
     },
 
     shouldShowAdminCompactTabs(routeName) {
+      if (routeName === "status") return true;
       return this.isAdminCompactLayout && this.adminCompactTabs(routeName).length > 0;
     },
 
     updateAdminStickyLayoutState() {
-      this.updateAdminCompactTabsStickyState();
+      this.revealAdminActiveNavigation();
       this.updateAdminRightStackStickyOffsets();
+      this.syncAdminTabSemantics();
     },
 
-    updateAdminCompactTabsStickyState() {
-      if (typeof window === "undefined" || typeof document === "undefined") {
-        return;
-      }
-      const nodes = Array.from(document.querySelectorAll(".admin-compact-tabs"));
-      for (const node of nodes) {
-        if (!(node instanceof HTMLElement)) {
-          continue;
+    syncAdminTabSemantics() {
+      const routeName = this.route.name;
+      const tabs = this.adminCompactTabs(routeName);
+      if (!tabs.length) return;
+      const groups = Array.from(document.querySelectorAll(`[data-admin-compact-tabs="${routeName}"] [role="tablist"]`));
+      for (const [groupIndex, group] of groups.entries()) {
+        const visible = group.getClientRects().length > 0;
+        for (const [index, button] of Array.from(group.querySelectorAll('[role="tab"]')).entries()) {
+          const tab = tabs[index];
+          if (!tab) continue;
+          const selected = this.adminCompactTab(routeName) === tab.id;
+          button.id = `admin-tab-${routeName}-${groupIndex}-${tab.id}`;
+          button.dataset.adminTab = tab.id;
+          button.tabIndex = selected ? 0 : -1;
+          button.setAttribute("aria-selected", String(selected));
+          const expected = `adminCompactPanelVisible('${routeName}', '${tab.id}')`.replaceAll(" ", "");
+          const panel = Array.from(document.querySelectorAll("[x-show]")).find((node) => String(node.getAttribute("x-show")).replaceAll(" ", "") === expected);
+          if (panel) {
+            panel.id = `admin-panel-${routeName}-${tab.id}`;
+            button.setAttribute("aria-controls", panel.id);
+            if (visible) {
+              panel.setAttribute("role", "tabpanel");
+              panel.setAttribute("aria-labelledby", button.id);
+            }
+          }
         }
-        const isVisible = node.getClientRects().length > 0;
-        const stickyTop = Number.parseFloat(window.getComputedStyle(node).top || "0") || 0;
-        const rect = node.getBoundingClientRect();
-        const isStuck = Boolean(isVisible && window.scrollY > 0 && rect.top <= stickyTop + 1);
-        node.dataset.stuck = String(isStuck);
       }
+    },
+
+    async handleAdminTabKeydown(event) {
+      if (event.defaultPrevented) return;
+      const button = event.target.closest?.('[role="tab"][data-admin-tab]');
+      if (!button || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = Array.from(button.closest('[role="tablist"]').querySelectorAll('[role="tab"]'));
+      const index = buttons.indexOf(button);
+      const target = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+      event.preventDefault();
+      await this.setAdminCompactTab(this.route.name, buttons[target].dataset.adminTab);
+      buttons[target].focus();
     },
 
     updateAdminRightStackStickyOffsets() {
@@ -128,7 +229,8 @@ export function createAdminShellModule() {
       }
       const nodes = Array.from(document.querySelectorAll(".admin-right-pane--stack"));
       const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
-      const gap = 24;
+      const gap = 20;
+      const headerHeight = document.querySelector(".admin-topbar-shell")?.getBoundingClientRect().height || 72;
       for (const node of nodes) {
         if (!(node instanceof HTMLElement)) {
           continue;
@@ -138,7 +240,7 @@ export function createAdminShellModule() {
           continue;
         }
         const height = Math.ceil(node.getBoundingClientRect().height || node.scrollHeight || 0);
-        const stickyTop = Math.min(gap, viewportHeight - height - gap);
+        const stickyTop = Math.min(headerHeight + gap, viewportHeight - height - gap);
         node.style.setProperty("--admin-right-pane-stack-top", `${Math.round(stickyTop)}px`);
       }
     },
@@ -146,7 +248,17 @@ export function createAdminShellModule() {
     isPrimaryNavItemActive(href) {
       const target = String(href || "").trim();
       if (!target) return false;
-      return String(this.route?.path || "").startsWith(target);
+      return (this.adminParentNavItem()?.href || this.route?.path) === target;
+    },
+
+    revealAdminActiveNavigation() {
+      const nav = document.querySelector(".admin-mobile-nav-shell nav");
+      const active = nav?.querySelector('[aria-current="page"]');
+      if (!active || !nav.getClientRects().length) return;
+      const bounds = nav.getBoundingClientRect();
+      const item = active.getBoundingClientRect();
+      if (item.right > bounds.right) nav.scrollLeft += item.right - bounds.right + 8;
+      else if (item.left < bounds.left) nav.scrollLeft -= bounds.left - item.left + 8;
     },
 
     async setAdminCompactTab(routeName, tabId, { scroll = false } = {}) {
@@ -156,10 +268,12 @@ export function createAdminShellModule() {
       if (!config || !(config.tabs || []).some((item) => item.id === nextTab)) {
         return;
       }
+      if (key === "attempt-detail" && nextTab === "review") this.attemptEvaluationExpanded = false;
       this.adminCompactTabsState = {
         ...(this.adminCompactTabsState || {}),
         [key]: nextTab,
       };
+      if (key === "status") this.setRouteSearchParams({ ...this.route.query, tab: nextTab });
       await this.$nextTick();
       if (key === "logs") {
         if (this.shouldRenderLogsChart()) {
@@ -193,7 +307,8 @@ export function createAdminShellModule() {
       const candidates = Array.from(document.querySelectorAll(selector));
       const target = candidates.find((node) => node instanceof HTMLElement && node.getClientRects().length > 0) || candidates[0];
       if (!target || typeof target.scrollIntoView !== "function") return;
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target.scrollIntoView({ behavior: reducedMotion ? "instant" : "smooth", block: "start" });
     },
 
     pretty(value) {
@@ -258,6 +373,8 @@ export function createAdminShellModule() {
     },
 
     async logout() {
+      if (this.confirmJobDescriptionLeave && !(await this.confirmJobDescriptionLeave())) return;
+      this.userMenuOpen = false;
       this.destroyLogsChart();
       this.stopSyncPolling();
       this.stopAssignmentsPolling();
@@ -266,6 +383,8 @@ export function createAdminShellModule() {
       window.clearTimeout(this.jobDescriptionsFilterTimer);
       this.jobDescriptionsFilterTimer = null;
       this.adminCompactTabsState = {};
+      this.adminListLocations = {};
+      this.dashboard = null;
       await this.api("/api/admin/session/logout", { method: "POST", quiet: true });
       this.session = { authenticated: false, username: "" };
       this.loginForm = { username: "", password: "" };

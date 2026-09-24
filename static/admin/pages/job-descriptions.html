@@ -1,4 +1,4 @@
-<div x-show="route.name === 'job-descriptions'" class="admin-job-description-page admin-mobile-pane-grid grid min-h-0 gap-4 xl:grid-cols-[25rem_minmax(0,1fr)]">
+<div x-show="route.name === 'job-descriptions'" class="admin-job-description-page admin-mobile-pane-grid grid min-h-0 gap-4 xl:items-start xl:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[24rem_minmax(0,1fr)]">
   <div
     x-show="shouldShowAdminCompactTabs('job-descriptions')"
     x-cloak
@@ -22,15 +22,16 @@
 
   <section
     x-show="adminCompactPanelVisible('job-descriptions', 'list')"
-    class="admin-job-description-list admin-surface admin-edge-panel overflow-hidden rounded-3xl border border-white/70 bg-white/82 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+    class="admin-job-description-list admin-surface admin-edge-panel flex min-h-0 flex-col overflow-hidden rounded-xl xl:sticky xl:top-[var(--admin-sticky-top)] xl:h-[var(--admin-pane-height)] xl:max-h-[var(--admin-pane-height)] xl:self-start"
   >
-    <div class="shrink-0 flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+    <div class="flex shrink-0 flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
       <div>
         <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">职位列表</h2>
         <p class="mt-1 text-sm text-slate-600">管理岗位说明、任职要求与面试侧重点。</p>
       </div>
       <button
         @click="startCreateJobDescription"
+        :disabled="Boolean(jobDescriptionOperation || jobDescriptionPendingTransition)"
         type="button"
         class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
       >
@@ -39,21 +40,23 @@
       </button>
     </div>
 
-    <div class="shrink-0 grid gap-3 border-t border-blue-100/70 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_10rem]">
+    <div class="grid shrink-0 gap-3 border-t border-blue-100/70 p-4 sm:grid-cols-[minmax(0,1fr)_8rem] sm:p-5">
       <div x-data="{ composing: false }" class="min-w-0">
         <input
           x-model="filters.jobDescriptions.q"
           @input="if (!composing) scheduleJobDescriptionsReloadFromFirstPage()"
-          @change="reloadJobDescriptionsFromFirstPage"
+          @change="reloadJobDescriptionsFromFirstPage({ replace: true })"
           @compositionstart="composing = true"
           @compositionend="composing = false; scheduleJobDescriptionsReloadFromFirstPage()"
           @keydown.enter.prevent="if (!composing) $event.target.blur()"
           class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-300"
+          aria-label="搜索岗位名称、内容或编号"
           placeholder="搜索岗位名称 / 内容 / ID"
         />
       </div>
       <select
         x-model="filters.jobDescriptions.status"
+        aria-label="筛选职位状态"
         @change="reloadJobDescriptionsFromFirstPage"
         class="w-full rounded-lg border border-blue-100 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-300"
       >
@@ -64,13 +67,15 @@
       </select>
     </div>
 
-    <div class="admin-job-description-items divide-y divide-blue-100/70 border-t border-blue-100/70">
+    <div class="admin-job-description-items min-h-0 divide-y divide-blue-100/70 border-t border-blue-100/70 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain">
       <template x-for="item in jobDescriptions.items" :key="item.id">
         <button
           type="button"
           @click="loadJobDescription(item.id)"
+          :disabled="Boolean(jobDescriptionOperation || jobDescriptionPendingTransition)"
+          :aria-current="Number(jobDescriptionForm.id) === Number(item.id) ? 'true' : null"
           :class="Number(jobDescriptionForm.id || 0) === Number(item.id || 0) ? 'bg-blue-50/70' : 'hover:bg-blue-50/45'"
-          class="group w-full px-5 py-4 text-left transition focus:outline-none focus-visible:bg-blue-50/80"
+          class="group w-full px-4 sm:px-5 py-4 text-left transition focus:outline-none focus-visible:bg-blue-50/80"
         >
           <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">
@@ -88,14 +93,14 @@
           </div>
         </button>
       </template>
-      <div x-show="!(jobDescriptions.items || []).length" class="px-5 py-12 text-center text-sm text-slate-500">
+      <div x-show="!(jobDescriptions.items || []).length" class="px-4 sm:px-5 py-12 text-center text-sm text-slate-500">
         当前筛选条件下没有职位
       </div>
     </div>
 
     <div
       x-show="jobDescriptionsHavePagination()"
-      class="shrink-0 flex flex-col gap-3 border-t border-blue-100/70 bg-slate-50/45 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
+      class="shrink-0 flex flex-col gap-3 border-t border-blue-100/70 bg-slate-50/45 px-4 sm:px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <div class="text-sm text-slate-600 tabular-nums" x-text="'共 ' + (jobDescriptions.total || 0) + ' 条 / 第 ' + (jobDescriptions.page || 1) + ' 页，共 ' + (jobDescriptions.total_pages || 1) + ' 页'"></div>
       <div class="flex flex-wrap items-center gap-2">
@@ -129,9 +134,9 @@
 
   <section
     x-show="adminCompactPanelVisible('job-descriptions', 'editor')"
-    class="admin-job-description-editor admin-surface admin-edge-panel admin-right-pane flex min-h-0 flex-col rounded-3xl border border-white/70 bg-white/82 shadow-[var(--admin-shadow)] backdrop-blur-xl md:max-xl:h-[calc(100dvh-2.5rem)] md:max-xl:max-h-[calc(100dvh-2.5rem)]"
+    class="admin-job-description-editor admin-surface admin-edge-panel flex h-auto min-h-0 flex-col self-start rounded-xl"
   >
-    <div class="shrink-0 flex flex-col gap-2 px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
+    <div class="shrink-0 flex flex-col gap-2 px-4 sm:px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
       <div class="min-w-0">
         <h2 class="text-lg font-semibold leading-6 tracking-[-0.02em] text-slate-900" x-text="jobDescriptionEditorTitle()"></h2>
         <div class="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
@@ -151,20 +156,20 @@
         <button
           @click="saveJobDescription"
           type="button"
-          :disabled="jobDescriptionReadOnly()"
-          :class="jobDescriptionReadOnly() ? 'cursor-not-allowed opacity-45' : ''"
-          class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+          :disabled="jobDescriptionEditorLocked()"
+          :class="jobDescriptionEditorLocked() ? 'cursor-not-allowed opacity-45' : ''"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white transition hover:bg-blue-700"
         >
           <span class="material-symbols-rounded text-base">save</span>
-          保存
+          <span x-text="jobDescriptionOperation === 'saving' ? '保存中…' : '保存'"></span>
         </button>
         <button
           x-show="jobDescriptionForm.id"
           @click="deleteJobDescription"
           type="button"
-          :disabled="jobDescriptionReadOnly()"
-          :class="jobDescriptionReadOnly() ? 'cursor-not-allowed opacity-45' : ''"
-          class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+          :disabled="jobDescriptionEditorLocked()"
+          :class="jobDescriptionEditorLocked() ? 'cursor-not-allowed opacity-45' : ''"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
         >
           <span class="material-symbols-rounded text-base">delete</span>
           删除
@@ -172,14 +177,15 @@
       </div>
     </div>
 
+    <p x-show="jobDescriptionReadOnly()" class="border-t border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">仓库来源职位为只读，请在 Git 仓库中修改后同步。</p>
     <div class="flex min-h-0 flex-col divide-y divide-blue-100/70 border-t border-blue-100/70">
-      <section class="shrink-0 px-5 py-2">
+      <section class="shrink-0 px-4 sm:px-5 py-2">
         <div class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_10rem]">
           <label class="block min-w-0">
             <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">岗位名称</span>
             <input
               x-model="jobDescriptionForm.title"
-              :disabled="jobDescriptionReadOnly()"
+              :disabled="jobDescriptionEditorLocked()"
               class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-300"
               placeholder="高级后端工程师"
             />
@@ -195,7 +201,7 @@
                   class="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-300 bg-white/70 text-[10px] font-semibold leading-none text-slate-400 outline-none transition hover:border-slate-400 hover:text-slate-500 focus-visible:ring-2 focus-visible:ring-blue-100"
                 >?</span>
                 <span
-                  class="pointer-events-none absolute right-0 top-6 z-30 w-72 rounded-xl border border-blue-100 bg-white px-4 py-3 text-left text-xs font-normal normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-[var(--admin-shadow)] transition group-hover:opacity-100 group-focus-within:opacity-100"
+                  class="pointer-events-none absolute left-0 top-6 z-30 w-64 max-w-[calc(100vw-5rem)] rounded-lg border border-blue-100 bg-white px-4 py-3 text-left text-xs font-normal normal-case leading-5 tracking-normal text-slate-600 opacity-0 shadow-md transition group-hover:opacity-100 group-focus-within:opacity-100 lg:left-auto lg:right-0"
                 >
                   草稿：编写中，暂不作为正式岗位使用。<br />
                   启用：当前有效职位，可用于后续业务引用。<br />
@@ -205,7 +211,7 @@
             </span>
             <select
               x-model="jobDescriptionForm.status"
-              :disabled="jobDescriptionReadOnly()"
+              :disabled="jobDescriptionEditorLocked()"
               class="w-full rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-300"
             >
               <template x-for="option in jobDescriptionStatusOptions()" :key="option.key">
@@ -230,8 +236,8 @@
                   <button
                     type="button"
                     @click="removeJobDescriptionRelatedQuiz(quiz.quiz_key)"
-                    :disabled="jobDescriptionReadOnly()"
-                    :class="jobDescriptionReadOnly() ? 'cursor-not-allowed opacity-45' : ''"
+                    :disabled="jobDescriptionEditorLocked()"
+                    :class="jobDescriptionEditorLocked() ? 'cursor-not-allowed opacity-45' : ''"
                     class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400 transition"
                     :aria-label="'移除试题：' + quiz.title"
                     title="移除试题"
@@ -246,8 +252,8 @@
               x-show="!adding"
               type="button"
               @click="adding = true"
-              :disabled="jobDescriptionReadOnly()"
-              :class="jobDescriptionReadOnly() ? 'cursor-not-allowed opacity-45' : ''"
+              :disabled="jobDescriptionEditorLocked()"
+              :class="jobDescriptionEditorLocked() ? 'cursor-not-allowed opacity-45' : ''"
               class="inline-flex items-center justify-center rounded-lg border border-dashed border-blue-200 bg-white/55 py-6 text-blue-600 transition"
               aria-label="添加关联试题"
               title="添加关联试题"
@@ -264,7 +270,7 @@
               <input
                 x-model="query"
                 @blur="adding = false; query = ''"
-                :disabled="jobDescriptionReadOnly()"
+                :disabled="jobDescriptionEditorLocked()"
                 class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-300"
                 placeholder="输入试题名称或 ID"
                 aria-label="搜索要关联的试题"
@@ -280,8 +286,8 @@
                       type="button"
                       @mousedown.prevent
                       @click="addJobDescriptionRelatedQuiz(quiz.quiz_key); query = ''"
-                      :disabled="jobDescriptionReadOnly()"
-                      :class="jobDescriptionReadOnly() ? 'cursor-not-allowed opacity-45' : ''"
+                      :disabled="jobDescriptionEditorLocked()"
+                      :class="jobDescriptionEditorLocked() ? 'cursor-not-allowed opacity-45' : ''"
                       class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-600"
                       :aria-label="'添加试题：' + (quiz.title || quiz.quiz_key)"
                       title="添加试题"
@@ -305,12 +311,16 @@
       </section>
 
       <section class="flex min-h-[28rem] flex-col">
-        <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 py-2">
-          <div class="inline-flex rounded-lg border border-blue-100 bg-white/80 p-0.5" role="tablist" aria-label="职位内容视图">
+        <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-2">
+          <div class="inline-flex rounded-lg border border-blue-100 bg-white/80 p-0.5" role="tablist" aria-label="职位内容视图" @keydown.arrow-right.prevent="setJobDescriptionContentTab('preview'); $el.querySelector('[data-content-tab=preview]')?.focus()" @keydown.arrow-left.prevent="setJobDescriptionContentTab('edit'); $el.querySelector('[data-content-tab=edit]')?.focus()" @keydown.home.prevent="setJobDescriptionContentTab('edit'); $el.querySelector('[data-content-tab=edit]')?.focus()" @keydown.end.prevent="setJobDescriptionContentTab('preview'); $el.querySelector('[data-content-tab=preview]')?.focus()">
             <template x-for="tab in jobDescriptionContentTabs()" :key="tab.key">
               <button
                 type="button"
                 role="tab"
+                :id="'job-content-tab-' + tab.key"
+                :data-content-tab="tab.key"
+                :aria-controls="'job-content-' + tab.key"
+                :tabindex="jobDescriptionContentTab === tab.key ? 0 : -1"
                 @click="setJobDescriptionContentTab(tab.key)"
                 :class="jobDescriptionContentTabClass(tab.key)"
                 :aria-selected="String((jobDescriptionContentTab || 'preview') === tab.key)"
@@ -321,29 +331,39 @@
         </div>
 
         <div class="border-t border-blue-100/70">
+          <div x-show="(jobDescriptionContentTab || 'preview') === 'edit'" id="job-content-edit" role="tabpanel" aria-labelledby="job-content-tab-edit">
           <textarea
-            x-show="(jobDescriptionContentTab || 'preview') === 'edit'"
             x-ref="jobDescriptionContentEditor"
+            id="job-content-editor"
+            aria-label="职位 Markdown 正文"
             x-model="jobDescriptionForm.content_md"
             x-init="$nextTick(() => autosizeJobDescriptionEditor($el))"
             @input="autosizeJobDescriptionEditor($event.target)"
-            :readonly="jobDescriptionReadOnly()"
+            :readonly="jobDescriptionEditorLocked()"
             spellcheck="false"
-            class="block min-h-[28rem] w-full resize-none overflow-hidden border-0 bg-slate-50/70 px-5 py-4 font-mono text-sm leading-6 text-slate-700 outline-none transition placeholder:text-slate-400 focus:bg-white"
+            class="block min-h-[28rem] w-full resize-none overflow-hidden border-0 bg-slate-50/70 px-4 sm:px-5 py-4 font-mono text-sm leading-6 text-slate-700 outline-none transition placeholder:text-slate-400 focus:bg-white"
             placeholder="# 岗位职责&#10;&#10;- 负责核心服务设计与实现&#10;- 参与系统稳定性建设&#10;&#10;## 任职要求&#10;&#10;- 熟悉 Python / Web API / PostgreSQL"
           ></textarea>
+          </div>
 
           <div
             x-show="(jobDescriptionContentTab || 'preview') === 'preview'"
-            class="min-h-[28rem] bg-white/50 px-5 py-4"
+            id="job-content-preview" role="tabpanel" aria-labelledby="job-content-tab-preview"
+            :aria-busy="jobDescriptionPreview.loading"
+            class="min-h-[28rem] bg-white/50 px-4 sm:px-5 py-4"
           >
             <div
               x-show="jobDescriptionPreviewHtml()"
               class="quiz-rich admin-markdown text-sm leading-6 text-slate-800"
               x-html="jobDescriptionPreviewHtml()"
             ></div>
-            <div x-show="!jobDescriptionPreviewHtml()" class="grid min-h-64 place-items-center text-center text-sm text-slate-500">
-              保存后显示 Markdown 预览
+            <p x-show="jobDescriptionPreview.loading" role="status" class="py-8 text-sm text-slate-500">正在生成当前草稿预览…</p>
+            <div x-show="jobDescriptionPreview.error" role="alert" class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+              <p x-text="jobDescriptionPreview.error"></p>
+              <button type="button" @click="previewJobDescriptionDraft" class="mt-3 min-h-11 rounded-lg border border-rose-200 bg-white px-4 py-2">重新预览</button>
+            </div>
+            <div x-show="!jobDescriptionPreviewHtml() && !jobDescriptionPreview.loading && !jobDescriptionPreview.error" class="grid min-h-64 place-items-center text-center text-sm text-slate-500">
+              当前正文为空，切换到编辑即可开始编写。
             </div>
           </div>
         </div>

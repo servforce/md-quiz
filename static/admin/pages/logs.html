@@ -1,100 +1,33 @@
-<div x-show="route.name === 'logs'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <div
-              x-show="shouldShowAdminCompactTabs('logs')"
-              x-cloak
-              data-admin-compact-tabs="logs"
-              class="hidden admin-compact-tabs md:block xl:hidden"
-            >
-              <div class="admin-compact-tabs__track" role="tablist" aria-label="系统日志内容切换">
-                <template x-for="tab in adminCompactTabs('logs')" :key="tab.id">
-                  <button
-                    type="button"
-                    role="tab"
-                    @click="setAdminCompactTab('logs', tab.id)"
-                    :class="adminCompactTab('logs') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
-                    :aria-selected="String(adminCompactTab('logs') === tab.id)"
-                    class="admin-compact-tab"
-                    x-text="tab.label"
-                  ></button>
-                </template>
-              </div>
-            </div>
-
-            <section
-              x-show="adminCompactPanelVisible('logs', 'list')"
-              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
-            >
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">系统日志</h2>
-                  <p class="mt-1 text-sm text-slate-600">候选人、测验、邀约、判卷和系统告警日志。</p>
-                </div>
-                <button @click="loadLogs" type="button" class="whitespace-nowrap rounded-lg border border-blue-100 bg-blue-50 px-2 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">刷新</button>
-              </div>
-              <div class="admin-subsurface mt-5 overflow-hidden rounded-2xl border border-blue-100/80 bg-white/72">
-                <template x-for="item in logs.items" :key="item.id">
-                  <div class="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-start sm:gap-4">
-                    <div class="min-w-0">
-                      <div class="text-sm font-semibold text-slate-900" x-text="item.type_label"></div>
-                      <div class="mt-1 text-sm leading-6 text-slate-700" x-text="item.detail_text"></div>
-                    </div>
-                    <div class="font-mono text-xs text-slate-500 sm:pt-0.5 sm:text-right">
-                      <template x-if="item.has_time_range">
-                        <div class="space-y-1">
-                          <div><span class="text-slate-400">开始</span> <span x-text="item.started_at_display"></span></div>
-                          <div><span class="text-slate-400">结束</span> <span x-text="item.finished_at_display"></span></div>
-                          <div x-show="item.duration_display"><span class="text-slate-400">用时</span> <span x-text="item.duration_display"></span></div>
-                        </div>
-                      </template>
-                      <div x-show="!item.has_time_range" x-text="item.at_display"></div>
-                    </div>
-                  </div>
-                </template>
-                <div x-show="!(logs.items || []).length" class="px-4 py-10 text-center text-sm text-slate-500">
-                  当前暂无系统日志
-                </div>
-              </div>
-            </section>
-            <section
-              x-show="adminCompactPanelVisible('logs', 'trend')"
-              class="admin-surface admin-right-pane rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
-            >
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">分类趋势</h2>
-                  <p class="mt-1 text-sm text-slate-600">恢复近 30 天分类统计折线图，观察日志密度变化。</p>
-                </div>
-                <div class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700" x-text="logTrendRangeLabel()"></div>
-              </div>
-
-              <div class="admin-right-pane__body">
-                <template x-if="hasLogTrendData()">
-                  <div x-ref="logsTrendChart" class="mt-4 h-80 overflow-hidden rounded-[1.125rem] border border-slate-800/70 bg-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"></div>
-                </template>
-
-                <div x-show="!hasLogTrendData()" class="mt-4 grid h-80 place-items-center rounded-[1.125rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center">
-                  <div>
-                    <div class="text-sm font-semibold text-slate-700">近 30 天暂无分类波动</div>
-                    <p class="mt-2 text-sm leading-6 text-slate-500">保留分类汇总，后续产生新日志后会自动恢复折线图。</p>
-                  </div>
-                </div>
-
-                <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                  <template x-for="item in logCategoryCards()" :key="item.key">
-                    <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                      <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                          <div class="flex items-center gap-2">
-                            <span class="h-2.5 w-2.5 rounded-full" :style="'background-color:' + item.color"></span>
-                            <div class="text-sm font-semibold text-slate-900" x-text="item.label"></div>
-                          </div>
-                          <p class="mt-2 text-xs leading-5 text-slate-500" x-text="item.hint"></p>
-                        </div>
-                        <div class="text-2xl font-semibold tabular-nums text-slate-900" x-text="item.count"></div>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-              </div>
-            </section>
-          </div>
+<div class="admin-mobile-pane-grid grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(20rem,0.8fr)] xl:items-start">
+  <div x-show="shouldShowAdminCompactTabs('logs')" x-cloak data-admin-compact-tabs="logs" class="admin-compact-tabs hidden md:block xl:hidden">
+    <div class="admin-compact-tabs__track" role="tablist" aria-label="日志内容切换"><template x-for="tab in adminCompactTabs('logs')" :key="tab.id"><button type="button" role="tab" @click="setAdminCompactTab('logs',tab.id)" :class="adminCompactTab('logs') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'" :aria-selected="String(adminCompactTab('logs') === tab.id)" class="admin-compact-tab" x-text="tab.label"></button></template></div>
+  </div>
+  <section x-show="adminCompactPanelVisible('logs', 'list')" class="admin-surface min-w-0 overflow-hidden rounded-xl">
+    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+      <div><h2 class="text-xl font-semibold text-slate-900">操作记录</h2><p class="mt-1 text-sm text-slate-500">查看事件、操作者及执行时间。</p></div>
+      <button type="button" @click="loadLogs" :disabled="logsLoading" class="min-h-11 rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-700 disabled:opacity-50">刷新</button>
+    </header>
+    <form @submit.prevent="reloadLogsFromFirstPage()" class="flex flex-wrap items-end gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+      <label class="min-w-0 flex-1"><span class="mb-1 block text-xs font-medium text-slate-600">日志编号或操作者</span><input x-model="filters.logs.q" @input="scheduleLogsSearch" placeholder="搜索全部操作记录" class="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400" /></label>
+      <label><span class="mb-1 block text-xs font-medium text-slate-600">分类</span><select x-model="filters.logs.category" @change="reloadLogsFromFirstPage()" class="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">全部分类</option><template x-for="category in logCategoryCards()" :key="category.key"><option :value="category.key" x-text="category.label"></option></template></select></label>
+    </form>
+    <div :aria-busy="logsLoading" class="divide-y divide-slate-100">
+      <template x-for="item in logs.items" :key="item.id">
+        <article class="grid min-w-0 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:px-5">
+          <div class="min-w-0"><div class="flex flex-wrap items-center gap-x-3 gap-y-1"><h3 class="text-sm font-semibold text-slate-900" x-text="item.type_label"></h3><span class="font-mono text-xs text-slate-400" x-text="'#' + item.id"></span><span class="text-xs text-slate-500" x-text="'操作者：' + (item.actor || '未记录')"></span></div><p class="mt-2 break-words text-sm leading-6 text-slate-700" x-text="item.detail_text"></p></div>
+          <div class="text-xs tabular-nums leading-6 text-slate-500 sm:text-right"><template x-if="item.has_time_range"><div><div>开始 <span x-text="item.started_at_display"></span></div><div>结束 <span x-text="item.finished_at_display"></span></div><div x-show="item.duration_display">用时 <span x-text="item.duration_display"></span></div></div></template><div x-show="!item.has_time_range" x-text="item.at_display"></div></div>
+        </article>
+      </template>
+      <p x-show="!logs.items.length" class="px-5 py-12 text-center text-sm text-slate-500" x-text="logsLoading ? '正在加载记录…' : '没有符合条件的操作记录'"></p>
+    </div>
+    <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-4 text-sm sm:px-5">
+      <span class="text-slate-500" x-text="'共 ' + logs.total + ' 条 · 第 ' + logs.page + ' / ' + logs.total_pages + ' 页'"></span><div class="flex gap-2"><button type="button" @click="changeLogsPage(logs.page - 1)" :disabled="logsLoading || logs.page <= 1" class="min-h-11 rounded-lg border border-slate-200 px-3 disabled:opacity-40">上一页</button><button type="button" @click="changeLogsPage(logs.page + 1)" :disabled="logsLoading || logs.page >= logs.total_pages" class="min-h-11 rounded-lg border border-slate-200 px-3 disabled:opacity-40">下一页</button></div>
+    </footer>
+  </section>
+  <section x-show="adminCompactPanelVisible('logs', 'trend')" class="admin-surface min-w-0 rounded-xl p-4 sm:p-5">
+    <h2 class="text-xl font-semibold text-slate-900">分类趋势</h2><p class="mt-1 text-sm text-slate-500" x-text="logTrendRangeLabel()"></p><p class="mt-2 text-xs leading-5 text-slate-500">全局统计包含历史短信记录，不随左侧搜索和分类筛选变化。</p>
+    <template x-if="hasLogTrendData()"><div x-ref="logsTrendChart" class="mt-4 h-80 overflow-hidden rounded-lg border border-slate-200 bg-slate-50"></div></template>
+    <div x-show="!hasLogTrendData()" class="mt-4 grid h-48 place-items-center rounded-lg border border-dashed border-slate-200 text-sm text-slate-500">近 30 天暂无分类趋势</div>
+    <dl class="mt-5 divide-y divide-slate-100"><template x-for="item in logCategoryCards()" :key="item.key"><div class="flex items-center justify-between gap-3 py-3"><dt class="flex items-center gap-2 text-sm text-slate-600"><span class="h-2 w-2 rounded-full" :style="{backgroundColor:item.color}"></span><span x-text="item.label"></span></dt><dd class="font-semibold tabular-nums text-slate-900" x-text="item.count"></dd></div></template></dl><p class="mt-2 text-xs text-slate-500">分类数量为全部历史累计。</p>
+  </section>
+</div>

@@ -11,6 +11,7 @@ const QUIZ_ANALYTICS_LIST_SORT_OPTIONS = [
 ];
 
 export function createAdminQuizAnalyticsModule() {
+  let detailRequestId = 0;
   return {
     quizAnalyticsWindowOptions() {
       return QUIZ_ANALYTICS_WINDOW_OPTIONS;
@@ -110,7 +111,7 @@ export function createAdminQuizAnalyticsModule() {
     quizAnalyticsSummaryCards() {
       const summary = this.quizAnalyticsDetail?.summary || {};
       return [
-        { key: "total", label: "答题数量", value: Number(summary.total_attempt_count || 0), tone: "slate" },
+        { key: "total", label: "期间答题记录", value: Number(summary.total_attempt_count || 0), tone: "slate" },
         { key: "finished", label: "已完成", value: Number(summary.finished_count || 0), tone: "emerald" },
         { key: "progress", label: "进行中", value: Number(summary.in_progress_count || 0), tone: "amber" },
         { key: "scored", label: "可计分完成", value: Number(summary.scored_finished_count || 0), tone: "blue" },
@@ -310,30 +311,25 @@ export function createAdminQuizAnalyticsModule() {
       const maxCount = this.quizAnalyticsDistributionMaxCount(group);
       const count = Number(bucket?.count || 0);
       const percent = maxCount > 0 && count > 0 ? Math.max(8, Math.round((count / maxCount) * 100)) : 0;
-      return { height: `${percent}%` };
+      return { "--distribution-percent": `${percent}%` };
     },
 
     quizAnalyticsDistributionColumnButtonClass(group, row) {
       const count = Number(row?.count || 0);
       const active = this.quizAnalyticsDistributionRowIsActive(group, row);
-      const widthClass = "w-14";
       if (count <= 0) {
-        return `flex ${widthClass} shrink-0 flex-col items-center gap-2 rounded-xl px-1 py-1 text-center opacity-55`;
+        return "border-transparent opacity-55";
       }
       if (active) {
-        return `flex ${widthClass} shrink-0 flex-col items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/80 px-1 py-1 text-center transition`;
+        return "border-blue-200 bg-blue-50/80";
       }
-      return `flex ${widthClass} shrink-0 flex-col items-center gap-2 rounded-xl px-1 py-1 text-center transition hover:bg-slate-100/90 cursor-pointer`;
-    },
-
-    quizAnalyticsDistributionColumnsClass() {
-      return "flex min-w-max items-end gap-2";
+      return "border-transparent hover:bg-slate-100/90";
     },
 
     quizAnalyticsDistributionColumnTrackClass(group, row) {
       return this.quizAnalyticsDistributionRowIsActive(group, row)
-        ? "flex h-40 w-full items-end overflow-hidden rounded-xl border border-blue-200 bg-white px-1.5 py-1"
-        : "flex h-40 w-full items-end overflow-hidden rounded-xl bg-slate-100/85 px-1.5 py-1";
+        ? "border-blue-200 bg-white"
+        : "border-transparent bg-slate-100/85";
     },
 
     quizAnalyticsDistributionGapClass() {
@@ -455,6 +451,8 @@ export function createAdminQuizAnalyticsModule() {
         ? String(this.route?.params?.quizKey || "").trim()
         : "";
       this.setRouteSearchParams({
+        ...this.route.query,
+        tab: this.route?.name === "quiz-detail" ? this.quizDetailTab() : "",
         quiz_key: detailQuizKey === String(quizKey || "").trim() ? "" : String(quizKey || "").trim(),
         window: String(window || this.currentQuizAnalyticsWindow()).trim() || "month",
         start_date: String(normalizedStartDate || "").trim(),
@@ -472,6 +470,7 @@ export function createAdminQuizAnalyticsModule() {
     },
 
     async loadQuizAnalyticsDetail(quizKey, { quiet = false, syncRoute = true } = {}) {
+      const requestId = ++detailRequestId;
       const currentKey = String(quizKey || "").trim();
       if (!currentKey) {
         this.resetQuizAnalyticsDetail();
@@ -494,7 +493,7 @@ export function createAdminQuizAnalyticsModule() {
         query.set("version_id", versionId);
       }
       const data = await this.api(`/api/admin/quiz-analytics/${encodeURIComponent(currentKey)}?${query.toString()}`, { quiet });
-      if (!data) return null;
+      if (!data || requestId !== detailRequestId || this.route.name !== "quiz-detail" || this.route.params.quizKey !== currentKey) return null;
       this.quizAnalyticsDetail = data;
       if (syncRoute) {
         this.syncQuizAnalyticsRoute({

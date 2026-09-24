@@ -3977,19 +3977,9 @@ def list_system_logs(
             return [dict(r) for r in cur.fetchall()]
 
 
-def count_operation_logs() -> int:
-    """
-    Count business operation logs (exclude llm.usage rows).
-
-    Operations shown in UI:
-      - candidate.* (CRUD and related admin actions)
-      - exam.* (CRUD + public invite toggle)
-      - assignment timeline: assignment.create / assignment.verify / exam.enter / exam.finish
-      - system: system.alert
-    """
-    sql = """
- SELECT COUNT(*)
- FROM system_log sl
+def _operation_log_where_clause(*, query: str | None = None, category: str | None = None) -> tuple[str, list[Any]]:
+    """列表与分页总数共享筛选；保留原有操作日志范围。"""
+    where = """
  WHERE (
      sl.event_type LIKE 'candidate.%%' OR
      sl.event_type LIKE 'exam.%%' OR
@@ -3997,13 +3987,41 @@ def count_operation_logs() -> int:
      sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
    ) AND sl.event_type <> 'llm.usage'
    """
+    category_conditions = {
+        "candidate": "sl.event_type LIKE 'candidate.%%'",
+        "quiz": "sl.event_type LIKE 'exam.%%' AND sl.event_type NOT IN ('exam.grade','exam.enter','exam.finish')",
+        "grading": "sl.event_type = 'exam.grade'",
+        "assignment": "sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')",
+        "system": "sl.event_type = 'system.alert' OR sl.event_type LIKE 'sms.%%'",
+    }
+    if category:
+        where += f" AND ({category_conditions[category]})"
+    params: list[Any] = []
+    query_text = str(query or "").strip()
+    if query_text:
+        if query_text.isascii() and query_text.isdecimal():
+            # 用文本比较避免超长数字触发 bigint 越界，仍按完整数字 ID 匹配。
+            where += " AND sl.id::text = %s"
+            params.append(query_text.lstrip("0") or "0")
+        else:
+            literal = query_text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where += r" AND sl.actor ILIKE %s ESCAPE E'\\'"
+            params.append(f"%{literal}%")
+    return where, params
+
+
+def count_operation_logs(*, query: str | None = None, category: str | None = None) -> int:
+    where, params = _operation_log_where_clause(query=query, category=category)
+    sql = "SELECT COUNT(*) FROM system_log sl" + where
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            cur.execute(sql, tuple(params))
             return int(cur.fetchone()[0])
 
 
-def list_operation_logs(*, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+def list_operation_logs(
+    *, limit: int = 50, offset: int = 0, query: str | None = None, category: str | None = None,
+) -> list[dict[str, Any]]:
     """
     List business operation logs (exclude llm.usage rows), newest first.
     """
@@ -4027,19 +4045,16 @@ def list_operation_logs(*, limit: int = 50, offset: int = 0) -> list[dict[str, A
     sl.meta
   FROM system_log sl
   LEFT JOIN candidate c ON c.id = sl.candidate_id
-  WHERE (
-    sl.event_type LIKE 'candidate.%%' OR
-    sl.event_type LIKE 'exam.%%' OR
-    sl.event_type = 'system.alert' OR
-    sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
-  ) AND sl.event_type <> 'llm.usage'
+  """
+    where, params = _operation_log_where_clause(query=query, category=category)
+    sql += where + """
   ORDER BY sl.at DESC, sl.id DESC
   LIMIT %s
   OFFSET %s
   """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (int(limit), int(offset)))
+            cur.execute(sql, (*params, int(limit), int(offset)))
             return [dict(r) for r in cur.fetchall()]
 
 
@@ -4682,6 +4697,45 @@ def count_quiz_papers(
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
             return int(cur.fetchone()[0])
+
+
+def get_admin_dashboard_summary(*, at_from: datetime, at_to: datetime) -> dict[str, Any]:
+    """总览使用真实结束时间；保留已删除候选人的历史答卷，不读取任务内容。"""
+    paper_from = "FROM quiz_paper ep JOIN candidate c ON c.id = ep.candidate_id"
+    paper_fields = """
+        ep.id, ep.token, ep.quiz_key, ep.candidate_id, c.name AS candidate_name,
+        c.deleted_at AS candidate_deleted_at, ep.status, ep.handled_at, ep.finished_at,
+        COALESCE(NULLIF(qv.title, ''), NULLIF(qd.title, ''), ep.quiz_key) AS quiz_title
+    """
+    title_joins = """
+        LEFT JOIN quiz_version qv ON qv.id = ep.quiz_version_id
+        LEFT JOIN quiz_definition qd ON qd.quiz_key = ep.quiz_key
+    """
+    summary: dict[str, Any] = {}
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            for key, condition, params in (
+                ("unhandled", "ep.status = 'finished' AND ep.handled_at IS NULL", ()),
+                ("completed", "ep.status = 'finished' AND ep.finished_at >= %s AND ep.finished_at <= %s", (at_from, at_to)),
+            ):
+                cur.execute(f"SELECT COUNT(*) AS total {paper_from} WHERE {condition}", params)
+                total = int(cur.fetchone()["total"])
+                cur.execute(
+                    f"SELECT {paper_fields} {paper_from} {title_joins} WHERE {condition} "
+                    "ORDER BY ep.finished_at DESC NULLS LAST, ep.id DESC LIMIT 6",
+                    params,
+                )
+                summary[key] = {"total": total, "items": [dict(row) for row in cur.fetchall()]}
+            job_where = "FROM runtime_job WHERE status = 'failed' AND finished_at >= %s AND finished_at <= %s"
+            cur.execute(f"SELECT COUNT(*) AS total {job_where}", (at_from, at_to))
+            total = int(cur.fetchone()["total"])
+            cur.execute(
+                f"SELECT id, kind, status, attempts, finished_at {job_where} "
+                "ORDER BY finished_at DESC, id DESC LIMIT 6",
+                (at_from, at_to),
+            )
+            summary["failed_jobs"] = {"total": total, "items": [dict(row) for row in cur.fetchall()]}
+    return summary
 
 
 def count_unhandled_finished_quiz_papers(

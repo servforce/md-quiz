@@ -1,4 +1,4 @@
-<div x-show="route.name === 'candidates'" class="admin-candidates-page admin-mobile-pane-grid grid min-h-0 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+<div x-show="route.name === 'candidates'" class="admin-candidates-page admin-mobile-pane-grid grid min-h-0 gap-4 xl:items-start xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
   <div
     x-show="shouldShowAdminCompactTabs('candidates')"
     x-cloak
@@ -22,17 +22,18 @@
 
   <section
     x-show="adminCompactPanelVisible('candidates', 'list')"
-    class="admin-candidate-list admin-surface admin-edge-panel overflow-hidden rounded-3xl border border-white/70 bg-white/82 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+    class="admin-candidate-list admin-surface admin-edge-panel h-auto min-h-0 self-start overflow-hidden rounded-xl"
   >
-    <div class="flex flex-wrap items-center gap-2 px-5 py-4">
-      <h2 class="shrink-0 text-xl font-semibold tracking-[-0.03em] text-slate-900">候选人</h2>
+    <div class="p-4 sm:p-5">
+      <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">候选人</h2>
+      <p class="mt-1 text-sm text-slate-600">支持搜索、创建、详情查看与简历入库。</p>
 
-      <div class="flex min-w-0 flex-wrap items-center gap-1.5" style="flex: 1 1 420px">
-        <label x-data="{ composing: false }" class="block min-w-0" style="flex: 1 1 0; min-width: 160px">
+      <div class="mt-4 flex min-w-0 flex-wrap items-center gap-2">
+        <label x-data="{ composing: false }" class="block min-w-[10rem] flex-[1_1_14rem]">
           <input
             x-model="filters.candidates.q"
             @input="if (!composing) scheduleCandidatesReloadFromFirstPage()"
-            @change="reloadCandidatesFromFirstPage"
+            @change="reloadCandidatesFromFirstPage({ replace: true })"
             @compositionstart="composing = true"
             @compositionend="composing = false; scheduleCandidatesReloadFromFirstPage()"
             @keydown.enter.prevent="if (!composing) $event.target.blur()"
@@ -41,72 +42,73 @@
             placeholder="搜索姓名/手机号"
           />
         </label>
-        <div class="inline-flex min-w-0 flex-nowrap items-center gap-1.5" style="flex: 0 0 256px; min-width: 256px" role="group" aria-label="创建时间">
-          <label class="block min-w-0" style="flex: 1 1 0; min-width: 0">
+        <div class="grid min-w-0 flex-[1_1_16rem] grid-cols-2 gap-2" role="group" aria-label="创建时间">
+          <label class="block min-w-0">
             <input
               type="date"
               x-model="filters.candidates.created_from"
               @change="reloadCandidatesFromFirstPage"
               aria-label="创建时间开始日期"
-              style="min-width: 0"
-              class="h-9 w-full rounded-lg border border-blue-100 bg-white px-1.5 text-xs text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              class="h-9 min-w-0 w-full rounded-lg border border-blue-100 bg-white px-1.5 text-xs text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
             />
           </label>
-          <label class="block min-w-0" style="flex: 1 1 0; min-width: 0">
+          <label class="block min-w-0">
             <input
               type="date"
               x-model="filters.candidates.created_to"
               @change="reloadCandidatesFromFirstPage"
               aria-label="创建时间结束日期"
-              style="min-width: 0"
-              class="h-9 w-full rounded-lg border border-blue-100 bg-white px-1.5 text-xs text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              class="h-9 min-w-0 w-full rounded-lg border border-blue-100 bg-white px-1.5 text-xs text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
             />
           </label>
         </div>
       </div>
-      <p class="text-sm text-slate-600" style="flex: 1 0 100%">支持搜索、创建、详情查看与简历入库。</p>
     </div>
 
     <div class="admin-candidate-items divide-y divide-blue-100/70 border-t border-blue-100/70">
       <template x-for="item in candidates.items" :key="item.id">
-        <button
-          type="button"
-          @click="go('/admin/candidates/' + item.id)"
-          class="group w-full px-5 py-3 text-left transition hover:bg-blue-50/45 focus:outline-none focus-visible:bg-blue-50/80"
-        >
-          <div class="grid gap-2.5 md:grid-cols-[minmax(8rem,0.8fr)_minmax(14rem,1.4fr)_minmax(8rem,auto)] md:items-start">
-            <div class="min-w-0">
-              <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <span class="truncate text-lg font-semibold leading-6 text-slate-900 transition group-hover:text-blue-700" x-text="item.name"></span>
-                <span x-show="item.has_resume" class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold leading-5 text-emerald-700">有简历</span>
-              </div>
-              <div class="mt-0.5 font-mono text-xs leading-5 text-slate-500" x-text="item.phone"></div>
-              <div class="font-mono text-[11px] leading-5 tabular-nums text-slate-400" x-text="formatDateTime(item.created_at)"></div>
+        <article class="grid gap-3 px-4 py-3 transition hover:bg-blue-50/30 sm:px-5 md:grid-cols-[minmax(9rem,0.75fr)_minmax(0,1.25fr)] md:items-center">
+          <div class="min-w-0">
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 class="min-w-0 text-base font-semibold leading-6 text-slate-900">
+                <a :href="'/admin/candidates/' + item.id" @click="go('/admin/candidates/' + item.id, $event)" class="inline-flex min-h-11 items-center rounded-md py-1 underline-offset-4 hover:text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-blue-600" x-text="item.name"></a>
+              </h3>
+              <span x-show="item.has_resume" class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">有简历</span>
             </div>
-            <div class="grid min-w-0 gap-1 md:col-span-2 md:justify-start md:pl-5">
-              <template x-for="summary in candidateAttemptDisplayRows(item)" :key="summary.token || summary.quiz_key || item.id">
-                <div class="grid min-w-0 gap-1.5 md:w-fit md:max-w-full md:grid-cols-[minmax(12rem,max-content)_auto] md:items-center md:gap-4">
-                  <div class="min-w-0 text-sm leading-5 text-slate-700 md:min-w-[14rem]">
-                    <span class="block truncate" x-text="candidateAttemptTitle(summary) || '暂无试卷'"></span>
-                  </div>
-                  <div class="flex max-w-full flex-wrap items-center gap-1.5">
-                    <span :class="candidateAttemptCompletionClass(summary)" x-text="candidateAttemptCompletionLabel(summary)"></span>
-                    <span x-show="candidateAttemptShowScore(summary)" class="font-mono text-[11px] leading-5 tabular-nums text-slate-500" x-text="candidateAttemptScoreLabel(summary)"></span>
-                  </div>
-                </div>
-              </template>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] leading-5 tabular-nums text-slate-500">
+              <span class="text-slate-600" x-text="item.phone"></span>
+              <span x-text="formatDateTime(item.created_at)"></span>
             </div>
           </div>
-        </button>
+          <div class="min-w-0 divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white/80">
+            <template x-for="(summary, index) in candidateAttemptDisplayRows(item)" :key="summary.token || (item.id + '-' + index)">
+              <div class="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-1.5">
+                <template x-if="candidateAttemptUrl(summary)">
+                  <a :href="candidateAttemptUrl(summary)" @click="go(candidateAttemptUrl(summary), $event)" :aria-label="'查看答卷：' + candidateAttemptTitle(summary)" class="inline-flex min-h-11 min-w-0 flex-[1_1_10rem] items-center justify-between gap-2 rounded-md text-sm font-medium text-blue-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-blue-600">
+                    <span class="min-w-0 break-words" x-text="candidateAttemptTitle(summary)"></span>
+                    <span class="material-symbols-rounded shrink-0 text-base" aria-hidden="true">arrow_outward</span>
+                  </a>
+                </template>
+                <template x-if="!candidateAttemptUrl(summary)">
+                  <div class="py-1 text-sm text-slate-600" x-text="candidateAttemptTitle(summary) || '暂无答题记录'"></div>
+                </template>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span :class="candidateAttemptCompletionClass(summary)" x-text="candidateAttemptCompletionLabel(summary)"></span>
+                  <span x-show="candidateAttemptShowScore(summary)" class="font-mono text-xs tabular-nums text-slate-600" x-text="candidateAttemptScoreLabel(summary)"></span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </article>
       </template>
-      <div x-show="!(candidates.items || []).length" class="px-5 py-12 text-center text-sm text-slate-500">
+      <div x-show="!(candidates.items || []).length" class="px-4 sm:px-5 py-12 text-center text-sm text-slate-500">
         当前筛选条件下没有候选人
       </div>
     </div>
 
     <div
       x-show="candidatesHavePagination()"
-      class="flex flex-col gap-3 border-t border-blue-100/70 bg-slate-50/45 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
+      class="flex flex-col gap-3 border-t border-blue-100/70 bg-slate-50/45 px-4 sm:px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <div class="text-sm text-slate-600 tabular-nums" x-text="'共 ' + (candidates.total || 0) + ' 条 / 第 ' + (candidates.page || 1) + ' 页，共 ' + (candidates.total_pages || 1) + ' 页'"></div>
       <div class="flex flex-wrap items-center gap-2">
@@ -140,15 +142,15 @@
 
   <section
     x-show="adminCompactPanelVisible('candidates', 'create')"
-    class="admin-candidate-create admin-surface admin-edge-panel admin-right-pane overflow-hidden rounded-3xl border border-white/70 bg-white/82 p-0 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+    class="admin-candidate-create admin-surface admin-edge-panel admin-right-pane overflow-hidden p-0 rounded-xl"
   >
-    <div class="shrink-0 px-5 py-5">
+    <div class="shrink-0 px-4 sm:px-5 py-4 sm:py-5">
       <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建候选人</h2>
       <p class="mt-1 text-sm text-slate-600">手动建档，或从简历直接解析入库。</p>
     </div>
 
     <div class="admin-right-pane__body divide-y divide-blue-100/70 border-t border-blue-100/70">
-      <section class="px-5 py-5">
+      <section class="px-4 sm:px-5 py-4 sm:py-5">
         <div class="space-y-4">
           <label class="block">
             <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">姓名</span>
@@ -177,8 +179,8 @@
         </div>
       </section>
 
-      <section class="px-5 py-5">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <section class="px-4 sm:px-5 py-4 sm:py-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div class="text-sm font-semibold text-slate-900">从简历直接入库</div>
             <p class="mt-1 text-sm leading-6 text-slate-600">先手动选择职位，再上传简历。系统会自动解析手机号并创建或更新候选人。</p>
@@ -220,13 +222,14 @@
         </label>
         <input
           x-ref="candidateResumeUpload"
+          aria-label="选择要导入的简历文件"
           @change="handleCandidateResumeUploadSelected($event)"
           type="file"
           accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
           class="sr-only"
         />
 
-        <div class="mt-5 border-t border-blue-100/70 pt-4">
+        <div class="mt-4 border-t border-blue-100/70 pt-4">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">当前状态</div>
             <span

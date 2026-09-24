@@ -1,5 +1,29 @@
 export function createAdminAssignmentsModule() {
+  let listRequestId = 0;
+  let detailRequestId = 0;
   return {
+    assignmentShareButtonId(item) {
+      return `assignment-share-button-${encodeURIComponent(String(item?.token || ""))}`;
+    },
+
+    assignmentSharePanelId(item) {
+      return `assignment-share-panel-${encodeURIComponent(String(item?.token || ""))}`;
+    },
+
+    assignmentShareIsOpen(item) {
+      return Boolean(item?.token) && this.assignmentShareToken === String(item.token);
+    },
+
+    toggleAssignmentShare(item) {
+      this.assignmentShareToken = this.assignmentShareIsOpen(item) ? "" : String(item?.token || "");
+    },
+
+    closeAssignmentShare({ restoreFocus = true } = {}) {
+      const token = this.assignmentShareToken;
+      this.assignmentShareToken = "";
+      if (restoreFocus && token) document.getElementById(this.assignmentShareButtonId({ token }))?.focus();
+    },
+
     normalizeAssignmentQuizKeys(value = null) {
       const raw = Array.isArray(value) ? value : [];
       const out = [];
@@ -405,7 +429,7 @@ export function createAdminAssignmentsModule() {
     },
 
     attemptReviewOptionRowClass(question, option) {
-      const classes = ["flex items-start gap-2.5 px-3 py-3"];
+      const classes = [];
       const selected = this.attemptReviewOptionIsSelected(question, option);
       const correct = this.attemptReviewOptionIsCorrect(question, option);
       if (this.attemptReviewIsTraitQuestion(question)) {
@@ -641,7 +665,7 @@ export function createAdminAssignmentsModule() {
       const quizKey = this.assignmentQuizKey(item);
       const directTitle = String(item?.quiz_title || item?.quiz_name || "").trim();
       if (directTitle) return directTitle;
-      const matched = (this.quizzes?.items || []).find((quiz) => String(quiz?.quiz_key || "").trim() === quizKey);
+      const matched = this.quizOptionByKey(quizKey);
       return String(matched?.title || "").trim() || quizKey || "未知测验";
     },
 
@@ -803,7 +827,7 @@ export function createAdminAssignmentsModule() {
     },
 
     isSyncBusy() {
-      return ["queued", "running"].includes(this.syncStatus());
+      return ["queued", "pending", "running"].includes(this.syncStatus());
     },
 
     hasRepoBinding() {
@@ -918,17 +942,23 @@ export function createAdminAssignmentsModule() {
       if (nextPage === this.currentAssignmentsPage()) {
         return;
       }
+      this.closeAssignmentShare({ restoreFocus: false });
+      this.assignments.page = nextPage;
+      this.syncAdminListRoute({ replace: false });
       await this.loadAssignments({ page: nextPage });
     },
 
-    async reloadAssignmentsFromFirstPage() {
+    async reloadAssignmentsFromFirstPage({ replace = false } = {}) {
+      this.closeAssignmentShare({ restoreFocus: false });
+      this.assignments.page = 1;
+      this.syncAdminListRoute({ replace });
       await this.loadAssignments({ page: 1 });
     },
 
     scheduleAssignmentsReloadFromFirstPage() {
       window.clearTimeout(this.assignmentsFilterTimer);
       this.assignmentsFilterTimer = window.setTimeout(() => {
-        this.loadAssignments({ page: 1 });
+        this.reloadAssignmentsFromFirstPage({ replace: true });
       }, 220);
     },
 
@@ -1017,6 +1047,7 @@ export function createAdminAssignmentsModule() {
     },
 
     async loadAssignments({ quiet = false, source = "manual", page = null } = {}) {
+      const requestId = ++listRequestId;
       const query = new URLSearchParams();
       const nextPage = this.normalizeAssignmentsPage(page, this.assignments?.page || 1);
       query.set("page", String(nextPage));
@@ -1028,8 +1059,11 @@ export function createAdminAssignmentsModule() {
       if (this.filters.assignments.end_to) query.set("end_to", this.filters.assignments.end_to);
       const previousSnapshot = { ...(this.assignmentStatusSnapshot || {}) };
       const data = await this.api(`/api/admin/assignments?${query.toString()}`, { quiet });
-      if (!data) return;
+      if (!data || requestId !== listRequestId) return;
       const nextItems = Array.isArray(data?.items) ? data.items : [];
+      if (this.assignmentShareToken && !nextItems.some((item) => String(item.token || "") === this.assignmentShareToken)) {
+        this.closeAssignmentShare({ restoreFocus: false });
+      }
       this.assignments = {
         ...(this.assignments || {}),
         items: nextItems,
@@ -1037,6 +1071,7 @@ export function createAdminAssignmentsModule() {
         ...data,
       };
       this.assignmentStatusSnapshot = this.assignmentStatusSnapshotMap(nextItems);
+      if (source !== "assignments-poll" && this.route.name === "assignments") this.syncAdminListRoute({ replace: true });
       if (source === "assignments-poll") {
         this.notifyAssignmentTransitions(nextItems, previousSnapshot);
       }
@@ -1082,10 +1117,14 @@ export function createAdminAssignmentsModule() {
     },
 
     async loadAttemptDetail(token, { quiet = false, source = "manual" } = {}) {
+      const requestId = ++detailRequestId;
       const currentToken = String(token || "").trim();
       const previousStatus = this.assignmentStatusValue(this.attemptDetail?.quiz_paper);
+      if (String(this.attemptDetail?.quiz_paper?.token || "") !== currentToken) {
+        this.attemptDetail = { assignment: {}, quiz_paper: {}, archive: {}, review: { answers: [], evaluation: {} } };
+      }
       const data = await this.api(`/api/admin/attempts/${encodeURIComponent(currentToken)}`, { quiet });
-      if (!data) return;
+      if (!data || requestId !== detailRequestId || this.route.name !== "attempt-detail" || this.route.params.token !== currentToken) return;
       const nextDetail = {
         assignment: data?.assignment || {},
         quiz_paper: data?.quiz_paper || {},

@@ -2,6 +2,7 @@ import { clearFragmentMount, loadHtmlFragment } from "/static/assets/js/shared/r
 
 export const ADMIN_ROUTE_FRAGMENTS = {
   login: { fragment: "/static/admin/pages/login.html", mountRef: "loginMount" },
+  dashboard: { fragment: "/static/admin/pages/dashboard.html", mountRef: "pageMount" },
   quizzes: { fragment: "/static/admin/pages/quizzes.html", mountRef: "pageMount" },
   "quiz-detail": { fragment: "/static/admin/pages/quiz-detail.html", mountRef: "pageMount" },
   candidates: { fragment: "/static/admin/pages/candidates.html", mountRef: "pageMount" },
@@ -61,17 +62,22 @@ export function createAdminRouterModule() {
 
     async renderCurrentRoute() {
       const current = this.currentAdminRouteFragment();
+      const requestId = this.adminRouteRequestId;
       const target = await this.resolveAdminRouteMount(current.mountRef);
       const otherRef = current.mountRef === "loginMount" ? "pageMount" : "loginMount";
       const other = this.$refs?.[otherRef];
-      clearFragmentMount(other, window.Alpine);
       if (!(target instanceof HTMLElement)) {
         return;
       }
+      const response = await fetch(current.fragment, { credentials: "same-origin", cache: "no-store" });
+      if (!response.ok) throw new Error("页面加载失败，请刷新重试");
+      const html = await response.text();
+      if (requestId !== this.adminRouteRequestId || current.fragment !== this.currentAdminRouteFragment().fragment || !target.isConnected) return;
+      clearFragmentMount(other, window.Alpine);
       await loadHtmlFragment({
         mount: target,
         path: current.fragment,
-        cache: null,
+        cache: { [current.fragment]: html },
         alpine: window.Alpine,
       });
     },
@@ -88,6 +94,9 @@ export function createAdminRouterModule() {
       });
       if (path === "/admin/login") {
         return withMeta({ name: "login", path, title: "管理员登录", section: "Login", params: {} });
+      }
+      if (path === "/admin/dashboard") {
+        return withMeta({ name: "dashboard", path, title: "任务总览", section: "Dashboard", params: {} });
       }
       if (path === "/admin" || path === "/admin/quizzes") {
         return withMeta({ name: "quizzes", path: "/admin/quizzes", title: "测验", section: "Quizzes", params: {} });
@@ -153,9 +162,7 @@ export function createAdminRouterModule() {
       await Promise.all([
         this.loadSystemBootstrap(),
         this.loadStatusSummary(),
-        this.loadQuizzes({ quiet: true }),
         this.loadQuizOptions({ quiet: true }),
-        this.loadCandidates({ quiet: true }),
       ]);
     },
 
@@ -163,17 +170,24 @@ export function createAdminRouterModule() {
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(nextParams || {})) {
         const text = String(value ?? "").trim();
-        if (text) {
+        if (text || (this.route.name === "assignments" && ["start_from", "end_to"].includes(key))) {
           params.set(key, text);
         }
       }
       const search = params.toString() ? `?${params.toString()}` : "";
       const nextRoute = this.resolveRoute(this.route?.path || "/admin/quizzes", search);
+      const changed = nextRoute.fullPath !== `${location.pathname}${location.search}`;
+      if (!replace && changed) this.rememberAdminScroll();
       this.route = nextRoute;
-      history[replace ? "replaceState" : "pushState"]({}, "", nextRoute.fullPath);
+      if (changed || replace) {
+        const current = history.state || {};
+        const meta = replace ? current : { ...current, admin: { ...current.admin, entryId: this.createAdminHistoryEntryId(), scrollY: window.scrollY } };
+        history[replace ? "replaceState" : "pushState"](meta, "", nextRoute.fullPath);
+      }
     },
 
-    async handleRoute(pathname, { replace = false, search = "" } = {}) {
+    async handleRoute(pathname, { replace = false, search = "", fromPop = false, restoreScroll = null, parentSource = undefined } = {}) {
+      this.userMenuOpen = false;
       if (!this.session.authenticated && pathname !== "/admin/login") {
         this.destroyLogsChart();
         this.stopSyncPolling();
@@ -188,6 +202,7 @@ export function createAdminRouterModule() {
         const legacyParams = new URLSearchParams(String(search || "").replace(/^\?/, ""));
         const quizKey = String(legacyParams.get("quiz_key") || "").trim();
         legacyParams.delete("quiz_key");
+        if (quizKey) legacyParams.set("tab", "analytics");
         const legacySearch = legacyParams.toString() ? `?${legacyParams.toString()}` : "";
         const destination = quizKey
           ? `/admin/quizzes/${encodeURIComponent(quizKey)}`
@@ -203,85 +218,127 @@ export function createAdminRouterModule() {
       }
 
       const previousRouteName = String(this.route?.name || "").trim();
+      const targetY = restoreScroll ?? (fromPop || replace ? Number(this.adminScrollPositions[history.state?.admin?.entryId] ?? history.state?.admin?.scrollY ?? 0) : 0);
+      if (nextRoute.name === "attempt-detail" && this.route.params?.token !== nextRoute.params.token) {
+        this.attemptShowOptionWeights = false;
+        this.attemptEvaluationExpanded = false;
+      }
+      const routeRequestId = ++this.adminRouteRequestId;
+      const previousSource = {
+        href: this.route.fullPath,
+        label: this.adminDetailTitle(),
+        scrollY: window.scrollY,
+        parent: this.adminParentNavItem() ? history.state?.admin?.source || null : null,
+      };
+      if (!fromPop && !replace) this.rememberAdminScroll();
+      if (previousRouteName === "assignments" && nextRoute.name !== "assignments") this.closeAssignmentShare?.({ restoreFocus: false });
+      if (previousRouteName === "candidate-detail" && (nextRoute.name !== "candidate-detail" || nextRoute.params.candidateId !== this.route.params.candidateId)) this.closeCandidateResumePreview?.();
       if (previousRouteName === "logs" && nextRoute.name !== "logs") {
         this.destroyLogsChart();
+        window.clearTimeout(this.logsFilterTimer);
+        this.logsRequestId += 1;
       }
       if (previousRouteName && previousRouteName !== nextRoute.name) {
         this.resetAdminCompactTab(previousRouteName);
       }
 
       this.route = nextRoute;
+      this.applyAdminListRoute(nextRoute);
       this.ensureAdminCompactTab(this.route.name);
-      if (!replace) {
-        history.pushState({}, "", this.route.fullPath);
-      } else {
-        history.replaceState({}, "", this.route.fullPath);
+      if (!fromPop) {
+        const meta = replace ? { ...(history.state || {}) } : { admin: {
+          entryId: this.createAdminHistoryEntryId(),
+          source: parentSource === undefined ? previousSource : parentSource,
+          scrollY: targetY,
+        } };
+        history[replace ? "replaceState" : "pushState"](meta, "", this.route.fullPath);
       }
 
-      this.error = "";
-      await this.renderCurrentRoute();
-      await this.$nextTick();
+      this.adminRouteLoading = true;
+      try {
+        this.error = "";
+        await this.renderCurrentRoute();
+        await this.$nextTick();
+        if (routeRequestId !== this.adminRouteRequestId) return;
 
-      if (this.route.name !== "quizzes") {
-        this.stopSyncPolling();
-      }
-      if (!["assignments", "attempt-detail"].includes(this.route.name)) {
-        this.stopAssignmentsPolling();
-      }
-      if (this.route.name !== "candidates") {
-        this.stopCandidateResumeUploadPolling();
-      }
-      if (this.route.name !== "candidate-detail") {
-        this.stopCandidateResumeReparsePolling();
-      }
-      if (this.route.name !== "job-descriptions") {
-        window.clearTimeout(this.jobDescriptionsFilterTimer);
-        this.jobDescriptionsFilterTimer = null;
-      }
+        if (this.route.name !== "quizzes") {
+          this.stopSyncPolling();
+        }
+        if (!["assignments", "attempt-detail"].includes(this.route.name)) {
+          this.stopAssignmentsPolling();
+        }
+        if (this.route.name !== "candidates") {
+          this.stopCandidateResumeUploadPolling();
+        }
+        if (this.route.name !== "candidate-detail") {
+          this.stopCandidateResumeReparsePolling();
+        }
+        if (this.route.name !== "job-descriptions") {
+          window.clearTimeout(this.jobDescriptionsFilterTimer);
+          this.jobDescriptionsFilterTimer = null;
+        }
 
-      switch (this.route.name) {
-        case "quizzes":
-          await this.loadQuizzes();
-          break;
-        case "quiz-detail":
-          await this.loadQuizDetail(this.route.params.quizKey);
-          break;
-        case "candidates":
-          this.resetCandidateResumeUploadState();
-          await this.loadCandidates();
-          break;
-        case "candidate-detail":
-          await this.loadCandidateDetail(this.route.params.candidateId);
-          break;
-        case "job-descriptions":
-          await this.loadQuizOptions({ quiet: true });
-          await this.loadJobDescriptions();
-          break;
-        case "assignments":
-          await this.loadQuizOptions({ quiet: true });
-          await this.loadCandidates({ quiet: true });
-          await this.loadAssignments();
-          break;
-        case "attempt-detail":
-          await this.loadAttemptDetail(this.route.params.token);
-          break;
-        case "logs":
-          await this.loadLogs();
-          break;
-        case "status":
-          await this.loadStatus();
-          break;
-        case "mcp":
-          await this.loadMcpPage();
-          break;
-        default:
-          break;
+        switch (this.route.name) {
+          case "dashboard":
+            await this.loadDashboard();
+            break;
+          case "quizzes":
+            await this.loadQuizzes();
+            break;
+          case "quiz-detail":
+            await this.loadQuizDetail(this.route.params.quizKey);
+            break;
+          case "candidates":
+            this.resetCandidateResumeUploadState();
+            await this.loadCandidates();
+            break;
+          case "candidate-detail":
+            await this.loadCandidateDetail(this.route.params.candidateId);
+            break;
+          case "job-descriptions":
+            await this.loadQuizOptions({ quiet: true });
+            await this.loadJobDescriptions();
+            break;
+          case "assignments":
+            await this.loadQuizOptions({ quiet: true });
+            await this.loadCandidates({ quiet: true });
+            await this.loadAssignments();
+            break;
+          case "attempt-detail":
+            await this.loadAttemptDetail(this.route.params.token);
+            break;
+          case "logs":
+            await this.loadLogs();
+            break;
+          case "status":
+            await this.loadStatus();
+            break;
+          case "mcp":
+            await this.loadMcpPage();
+            break;
+          default:
+            break;
+        }
+        await this.$nextTick();
+        if (routeRequestId !== this.adminRouteRequestId) return;
+        this.updateAdminStickyLayoutState();
+        window.scrollTo({ top: targetY, behavior: "instant" });
+        if (history.state?.admin?.entryId) this.adminScrollPositions[history.state.admin.entryId] = targetY;
+      } catch (error) {
+        if (routeRequestId === this.adminRouteRequestId) {
+          clearFragmentMount(this.$refs.pageMount, window.Alpine);
+          this.error = error.message || "页面加载失败，请重试";
+        }
+      } finally {
+        if (routeRequestId === this.adminRouteRequestId) this.adminRouteLoading = false;
       }
-      await this.$nextTick();
-      this.updateAdminStickyLayoutState();
     },
 
-    async go(path) {
+    async go(path, event = null) {
+      if (event) {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+      }
       const next = this.normalizeRouteLocation(path);
       await this.handleRoute(next.pathname, { search: next.search });
     },

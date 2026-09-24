@@ -150,3 +150,10 @@
 - `node_modules/mathjax/es5/tex-svg.js` -> `static/assets/js/vendor/mathjax/tex-svg.js`
 
 因此生产环境和 Docker 镜像不依赖外部 CDN。
+
+## 管理端启动与内网 HTTP
+
+- 管理页面支持普通内网 HTTP。导航历史条目的标识通过 `createAdminHistoryEntryId()` 生成，使用 `crypto.getRandomValues()`，不依赖仅安全上下文可用的 `crypto.randomUUID()`；该标识只供浏览器历史与滚动位置关联，不参与登录认证。
+- `boot()` 捕获初始化异常并在 `finally` 结束加载状态。失败时展示 `bootError` 和重新加载按钮，避免永久停留在加载遮罩。
+- 浏览器验收必须覆盖非 loopback 的 HTTP 地址。`localhost` 和 `127.0.0.1` 被视为安全上下文，不能代替实际内网 HTTP 场景。
+- 回归检查：`python -m pytest --noconftest tests/test_admin_http_browser.py -q`。需要安装 agent-browser 与 Chromium；测试启动临时静态服务器，执行真实导航模块及 API 404 失败路径，不访问业务数据库。可用 `ADMIN_BROWSER_TEST_HOST` 指定测试机的非 loopback IPv4 地址。

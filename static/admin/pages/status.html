@@ -1,148 +1,46 @@
-<div x-show="route.name === 'status'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-            <div
-              x-show="shouldShowAdminCompactTabs('status')"
-              x-cloak
-              data-admin-compact-tabs="status"
-              class="hidden admin-compact-tabs md:block xl:hidden"
-            >
-              <div class="admin-compact-tabs__track" role="tablist" aria-label="系统状态内容切换">
-                <template x-for="tab in adminCompactTabs('status')" :key="tab.id">
-                  <button
-                    type="button"
-                    role="tab"
-                    @click="setAdminCompactTab('status', tab.id)"
-                    :class="adminCompactTab('status') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
-                    :aria-selected="String(adminCompactTab('status') === tab.id)"
-                    class="admin-compact-tab"
-                    x-text="tab.label"
-                  ></button>
-                </template>
-              </div>
-            </div>
-
-            <section
-              x-show="adminCompactPanelVisible('status', 'summary')"
-              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
-            >
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">系统状态摘要</h2>
-                  <p class="mt-1 text-sm text-slate-600">恢复每日统计表，按天查看新增测验、邀约、候选人与资源消耗。</p>
-                </div>
-                <div class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700" x-text="statusRangeLabel()"></div>
-              </div>
-              <div x-show="statusConfigAlerts().length" class="mt-5 rounded-2xl border border-rose-200 bg-rose-50/85 p-4 text-sm text-rose-900">
-                <div class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-700">配置提醒</div>
-                <div class="mt-3 space-y-2">
-                  <template x-for="alert in statusConfigAlerts()" :key="alert.key">
-                    <div class="rounded-2xl border border-rose-100 bg-white/75 px-3 py-2.5">
-                      <div class="font-semibold text-rose-800" x-text="alert.label"></div>
-                      <div class="mt-1 text-xs leading-5 text-rose-700" x-text="alert.message"></div>
-                    </div>
-                  </template>
-                </div>
-              </div>
-              <div class="mt-5 grid gap-4 sm:grid-cols-2">
-                <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="text-xs uppercase tracking-[0.18em] text-slate-500">LLM</div>
-                    <div x-show="!statusModuleConfigured('llm')" class="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">未配置</div>
-                  </div>
-                  <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="statusSummary.llm?.used || 0"></div>
-                  <div class="mt-1 text-sm text-slate-600" x-text="'阈值 ' + (statusSummary.llm?.limit || 0)"></div>
-                  <div x-show="!statusModuleConfigured('llm')" class="mt-3 rounded-2xl border border-rose-100 bg-white/75 px-3 py-2 text-xs leading-5 text-rose-700" x-text="statusModuleMissingText('llm')"></div>
-                </div>
-                <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="text-xs uppercase tracking-[0.18em] text-slate-500">短信</div>
-                    <div x-show="!statusModuleConfigured('sms')" class="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">未配置</div>
-                  </div>
-                  <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="statusSummary.sms?.used || 0"></div>
-                  <div class="mt-1 text-sm text-slate-600" x-text="'阈值 ' + (statusSummary.sms?.limit || 0)"></div>
-                  <div x-show="!statusModuleConfigured('sms')" class="mt-3 rounded-2xl border border-rose-100 bg-white/75 px-3 py-2 text-xs leading-5 text-rose-700" x-text="statusModuleMissingText('sms')"></div>
-                </div>
-              </div>
-
-              <div class="mt-4 flex items-center gap-2 text-[11px] font-medium text-slate-500 md:hidden">
-                <span class="material-symbols-rounded text-sm text-slate-400">swap_horiz</span>
-                <span>左右滑动查看完整数据</span>
-              </div>
-
-              <div class="admin-subsurface admin-data-table mt-5 overflow-hidden rounded-[1.125rem] border border-slate-200 bg-white">
-                <div class="admin-data-table__scroller">
-                  <div class="admin-data-table__content">
-                    <div class="admin-data-table__grid grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      <div>日期</div>
-                      <div class="text-right">测验新增</div>
-                      <div class="text-right">邀约新增</div>
-                      <div class="text-right">候选人新增</div>
-                      <div class="text-right">LLM tokens</div>
-                      <div class="text-right">短信调用</div>
-                    </div>
-                    <div class="admin-data-table__body max-h-[520px]">
-                      <template x-for="item in statusDailyRows()" :key="item.day">
-                        <div class="admin-data-table__grid grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-700 last:border-b-0 hover:bg-blue-50/35">
-                          <div class="font-mono text-xs text-slate-500" x-text="item.day"></div>
-                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.quizzes_new)"></div>
-                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.invites_new)"></div>
-                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.candidates_new)"></div>
-                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.llm_tokens)"></div>
-                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.sms_calls)"></div>
-                        </div>
-                      </template>
-                      <div class="admin-data-table__grid sticky bottom-0 grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-t border-slate-200 bg-blue-50/95 px-4 py-3 text-sm text-slate-700 backdrop-blur-sm">
-                        <div class="font-semibold text-slate-900">区间合计</div>
-                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().quizzes_new)"></div>
-                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().invites_new)"></div>
-                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().candidates_new)"></div>
-                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().llm_tokens)"></div>
-                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().sms_calls)"></div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
+<div class="min-w-0 space-y-4">
+  <header class="admin-surface flex flex-wrap items-center justify-between gap-4 rounded-xl px-4 py-4 sm:px-5">
+    <div><h2 class="text-xl font-semibold text-slate-900">运行与资源</h2><p class="mt-1 text-sm text-slate-500">按天核对业务增长与资源消耗。</p></div>
+    <div class="flex flex-wrap items-center gap-3 text-sm"><span class="admin-health rounded-full border px-3 py-1.5" :data-level="statusSummary.overall_level || 'unknown'" x-text="adminSystemStatusLabel()"></span><button type="button" @click="loadStatus" class="min-h-11 rounded-lg border border-slate-200 px-4 text-slate-700">刷新</button></div>
+  </header>
+  <div data-admin-compact-tabs="status" class="admin-compact-tabs hidden md:block">
+    <div class="admin-compact-tabs__track" role="tablist" aria-label="系统状态内容切换"><template x-for="tab in adminCompactTabs('status')" :key="tab.id"><button type="button" role="tab" @click="setAdminCompactTab('status',tab.id)" :class="adminCompactTab('status') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'" :aria-selected="String(adminCompactTab('status') === tab.id)" class="admin-compact-tab" x-text="tab.label"></button></template></div>
+  </div>
+  <section x-show="adminCompactPanelVisible('status', 'summary')" class="admin-surface min-w-0 rounded-xl p-4 sm:p-5">
+    <div class="flex flex-wrap items-center justify-between gap-3"><h3 class="font-semibold text-slate-900">每日统计</h3><span class="text-sm text-slate-500" x-text="statusRangeLabel()"></span></div>
+    <dl class="mt-4 grid grid-cols-1 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-slate-50 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+      <div class="flex items-center justify-between gap-4 px-4 py-3"><dt class="text-sm text-slate-600">今日 LLM tokens<div class="mt-1 text-xs text-slate-500" x-text="'日阈值 ' + formatNumber(statusSummary.llm?.limit)"></div></dt><dd class="text-right"><div class="text-xl font-semibold tabular-nums text-slate-900" x-text="formatNumber(statusSummary.llm?.used)"></div><button type="button" x-show="!statusModuleConfigured('llm')" @click="setAdminCompactTab('status','config')" class="mt-1 text-xs font-medium text-amber-700">接入未配置 →</button></dd></div>
+      <div class="flex items-center justify-between gap-4 px-4 py-3"><dt class="text-sm text-slate-600">今日短信调用<div class="mt-1 text-xs text-slate-500" x-text="'日阈值 ' + formatNumber(statusSummary.sms?.limit)"></div></dt><dd class="text-right"><div class="text-xl font-semibold tabular-nums text-slate-900" x-text="formatNumber(statusSummary.sms?.used)"></div><button type="button" x-show="!statusModuleConfigured('sms')" @click="setAdminCompactTab('status','config')" class="mt-1 text-xs font-medium text-amber-700">接入未配置 →</button></dd></div>
+    </dl>
+    <p class="mt-4 text-xs text-slate-500">数据按日期倒序排列；窄屏可在表格内左右滑动。</p>
+    <div class="admin-data-table mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div class="admin-data-table__scroller" tabindex="0" role="region" aria-label="每日统计表，可横向滚动">
+        <div class="admin-data-table__content">
+          <div class="admin-data-table__grid grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500"><div>日期</div><div class="text-right">测验新增</div><div class="text-right">邀约新增</div><div class="text-right">候选人新增</div><div class="text-right">LLM tokens</div><div class="text-right">短信调用</div></div>
+          <div class="admin-data-table__body max-h-[520px]">
+            <template x-for="item in statusDailyRows()" :key="item.day"><div class="admin-data-table__grid grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-100 px-4 py-3 text-sm tabular-nums text-slate-700 hover:bg-blue-50/40"><div class="font-mono text-xs text-slate-500" x-text="item.day"></div><div class="text-right" x-text="formatNumber(item.quizzes_new)"></div><div class="text-right" x-text="formatNumber(item.invites_new)"></div><div class="text-right" x-text="formatNumber(item.candidates_new)"></div><div class="text-right" x-text="formatNumber(item.llm_tokens)"></div><div class="text-right" x-text="formatNumber(item.sms_calls)"></div></div></template>
+            <div class="admin-data-table__grid sticky bottom-0 grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-t border-slate-200 bg-blue-50 px-4 py-3 text-sm font-semibold tabular-nums text-slate-900"><div>区间合计</div><div class="text-right" x-text="formatNumber(statusDailyTotals().quizzes_new)"></div><div class="text-right" x-text="formatNumber(statusDailyTotals().invites_new)"></div><div class="text-right" x-text="formatNumber(statusDailyTotals().candidates_new)"></div><div class="text-right" x-text="formatNumber(statusDailyTotals().llm_tokens)"></div><div class="text-right" x-text="formatNumber(statusDailyTotals().sms_calls)"></div></div>
           </div>
-            </section>
-            <section
-              x-show="adminCompactPanelVisible('status', 'config')"
-              class="admin-surface admin-right-pane rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
-            >
-              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">阈值配置</h2>
-              <div class="admin-right-pane__body">
-                <div class="mt-4 space-y-4">
-                  <div class="grid gap-3 lg:grid-cols-2">
-                    <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                      <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                          <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">当前接入 LLM</div>
-                          <div class="mt-2 text-sm font-semibold text-slate-900" x-text="statusSummary.llm?.integration?.title || 'OpenAI 兼容 Responses API'"></div>
-                          <div class="mt-2 text-sm leading-6 text-slate-600" x-text="statusSummary.llm?.integration?.summary || '模型未设置 · 接口未设置'"></div>
-                        </div>
-                        <div x-show="!statusModuleConfigured('llm')" class="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">未配置</div>
-                      </div>
-                    </div>
-                    <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                      <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                          <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">短信认证摘要</div>
-                          <div class="mt-2 text-sm font-semibold text-slate-900" x-text="statusSummary.sms?.integration?.title || '阿里云 PNVS 短信认证'"></div>
-                          <div class="mt-2 text-sm leading-6 text-slate-600" x-text="statusSummary.sms?.integration?.summary || '签名未设置 · 模板未设置 · 接口未设置'"></div>
-                        </div>
-                        <div x-show="!statusModuleConfigured('sms')" class="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">未配置</div>
-                      </div>
-                    </div>
-                  </div>
-                  <label class="block">
-                    <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">LLM token 日阈值</span>
-                    <input x-model="statusConfig.llm_tokens_limit" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
-                  </label>
-                  <label class="block">
-                    <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">短信调用日阈值</span>
-                    <input x-model="statusConfig.sms_calls_limit" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
-                  </label>
-                  <button @click="saveStatusConfig" type="button" class="rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">保存阈值</button>
-                </div>
-              </div>
-            </section>
-          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section x-show="adminCompactPanelVisible('status', 'config')" class="admin-surface rounded-xl p-4 sm:p-5">
+    <h3 class="text-lg font-semibold text-slate-900">接入与阈值</h3>
+    <div class="mt-5 grid gap-6 lg:grid-cols-2">
+      <div class="min-w-0 divide-y divide-slate-200">
+        <div class="pb-5"><h4 class="font-medium text-slate-900">模型服务</h4><p class="mt-2 text-sm text-slate-700" x-text="statusSummary.llm?.integration?.title || 'OpenAI 兼容 Responses API'"></p><p class="mt-1 break-words text-sm leading-6 text-slate-500" x-text="statusSummary.llm?.integration?.summary || '接入信息尚未提供'"></p></div>
+        <div class="py-5"><h4 class="font-medium text-slate-900">短信认证</h4><p class="mt-2 text-sm text-slate-700" x-text="statusSummary.sms?.integration?.title || '阿里云 PNVS 短信认证'"></p><p class="mt-1 break-words text-sm leading-6 text-slate-500" x-text="statusSummary.sms?.integration?.summary || '接入信息尚未提供'"></p></div>
+        <div x-show="statusConfigAlerts().length" class="pt-4"><template x-for="alert in statusConfigAlerts()" :key="alert.key"><div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><div class="font-medium" x-text="alert.label"></div><p class="mt-1 text-xs leading-5" x-text="alert.message"></p></div></template></div>
+      </div>
+      <form @submit.prevent="saveStatusConfig" class="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <p class="text-sm leading-6 text-slate-500">达到日阈值时显示告警，帮助及时检查用量。</p>
+        <fieldset :disabled="statusConfigSaving" class="space-y-4">
+          <label class="block"><span class="mb-2 block text-sm font-medium text-slate-700">LLM token 日阈值</span><input type="number" min="0" step="1" x-model="statusConfig.llm_tokens_limit" class="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400" /></label>
+          <label class="block"><span class="mb-2 block text-sm font-medium text-slate-700">短信调用日阈值</span><input type="number" min="0" step="1" x-model="statusConfig.sms_calls_limit" class="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400" /></label>
+          <div class="flex flex-wrap items-center gap-3"><button type="submit" class="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-50" x-text="statusConfigSaving ? '正在保存…' : '保存阈值'"></button><span x-show="statusConfigBaseline && JSON.stringify(statusConfig) !== statusConfigBaseline" class="text-xs text-amber-700">有未保存修改</span></div>
+        </fieldset>
+      </form>
+    </div>
+  </section>
+</div>

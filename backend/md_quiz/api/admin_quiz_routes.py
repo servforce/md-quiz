@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Request, status
 
 from . import admin as shared
@@ -23,6 +25,7 @@ def list_exams(
     page: int = 1,
     sort_by: str = "updated_at",
     sort_order: str = "desc",
+    public_invite: Literal["", "enabled", "disabled"] = "",
 ):
     shared._require_admin(request)
     exams = shared.exam_helpers._list_exams()
@@ -39,6 +42,12 @@ def list_exams(
             or query in str(item.get("title") or "").lower()
             or query in str(item.get("id") or "")
             or any(query in str(tag or "").lower() for tag in (item.get("tags") or []))
+        ]
+    if public_invite:
+        enabled = public_invite == "enabled"
+        exams = [
+            item for item in exams
+            if bool(shared.exam_helpers.get_public_invite_config(item["quiz_key"])["enabled"]) == enabled
         ]
     sort_field, descending = _normalize_quiz_list_sort(sort_by, sort_order)
     exams.sort(key=lambda item: str(item.get("quiz_key") or "").lower())
@@ -62,6 +71,7 @@ def list_exams(
         "sync_state": shared.deps.read_exam_repo_sync_state(),
         "filters": {
             "q": str(q or "").strip(),
+            "public_invite": public_invite,
             "sort_by": sort_field,
             "sort_order": "desc" if descending else "asc",
         },

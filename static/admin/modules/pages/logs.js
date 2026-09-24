@@ -82,10 +82,10 @@ export function createAdminLogsModule() {
         height: Math.max(Math.round(container.clientHeight || 0), 320),
         layout: {
           background: {
-            color: "#020617",
+            color: "#f8fafc",
             type: chartLib.ColorType ? chartLib.ColorType.Solid : "solid",
           },
-          textColor: "#cbd5e1",
+          textColor: "#475569",
           fontFamily: "\"SF Pro Display\", \"Segoe UI Variable\", \"PingFang SC\", system-ui, sans-serif",
         },
         grid: {
@@ -155,7 +155,7 @@ export function createAdminLogsModule() {
             lastValueVisible: false,
             crosshairMarkerRadius: 4,
             crosshairMarkerBorderColor: item.color,
-            crosshairMarkerBackgroundColor: "#020617",
+            crosshairMarkerBackgroundColor: "#f8fafc",
             title: item.label,
           });
           if (!series) continue;
@@ -168,19 +168,49 @@ export function createAdminLogsModule() {
       }
     },
 
+    async reloadLogsFromFirstPage({ replace = false } = {}) {
+      this.logs.page = 1;
+      this.syncAdminListRoute({ replace });
+      await this.loadLogs();
+    },
+
+    scheduleLogsSearch() {
+      window.clearTimeout(this.logsFilterTimer);
+      this.logsFilterTimer = window.setTimeout(() => this.reloadLogsFromFirstPage({ replace: true }), 250);
+    },
+
+    async changeLogsPage(page) {
+      this.logs.page = Math.max(1, Math.min(Number(page || 1), this.logs.total_pages || 1));
+      this.syncAdminListRoute({ replace: false });
+      await this.loadLogs();
+    },
+
     async loadLogs() {
+      const requestId = ++this.logsRequestId;
+      this.logsLoading = true;
       const query = new URLSearchParams({
         days: String(LOG_TREND_WINDOW_DAYS),
         tz_offset_minutes: String(this.browserTzOffsetMinutes()),
+        page: String(this.logs.page || 1),
+        limit: "20",
+        q: this.filters.logs.q || "",
+        category: this.filters.logs.category || "",
       });
-      const data = await this.api(`/api/admin/logs?${query.toString()}`);
-      if (!data) return;
-      this.logs = data;
-      await this.$nextTick();
-      if (this.shouldRenderLogsChart()) {
-        this.renderLogsChart();
-      } else {
-        this.destroyLogsChart();
+      try {
+        const data = await this.api(`/api/admin/logs?${query.toString()}`);
+        if (!data || requestId !== this.logsRequestId || this.route.name !== "logs") return;
+        this.logs = data;
+        this.syncAdminListRoute({ replace: true });
+        await this.$nextTick();
+        if (this.shouldRenderLogsChart()) {
+          this.renderLogsChart();
+        } else {
+          this.destroyLogsChart();
+        }
+      } catch (_error) {
+        if (requestId === this.logsRequestId) this.showNotice("日志加载失败，请重试");
+      } finally {
+        if (requestId === this.logsRequestId) this.logsLoading = false;
       }
     },
 

@@ -58,6 +58,55 @@ export function createAdminJobDescriptionsModule() {
         .toLowerCase() === "git";
     },
 
+    jobDescriptionEditorLocked() {
+      return this.jobDescriptionReadOnly() || Boolean(this.jobDescriptionOperation || this.jobDescriptionPendingTransition);
+    },
+
+    hasUnsavedJobDescriptionChanges() {
+      return this.jobDescriptionFormDirty();
+    },
+
+    async confirmJobDescriptionLeave() {
+      if (this.jobDescriptionOperation || this.jobDescriptionPendingTransition) return false;
+      if (!this.jobDescriptionFormDirty()) return true;
+      this.jobDescriptionPendingTransition = { title: this.jobDescriptionForm.title || "新建职位", error: "" };
+      const decision = new Promise((resolve) => { this.jobDescriptionTransitionResolver = resolve; });
+      await this.$nextTick();
+      const dialog = this.$refs?.jobDescriptionUnsavedDialog;
+      if (!dialog || typeof dialog.showModal !== "function") {
+        this.showNotice("请先保存职位更改，再继续操作");
+        this.finishJobDescriptionTransition(false);
+        return decision;
+      }
+      dialog.showModal();
+      return decision;
+    },
+
+    finishJobDescriptionTransition(proceed) {
+      const resolve = this.jobDescriptionTransitionResolver;
+      this.jobDescriptionTransitionResolver = null;
+      this.jobDescriptionPendingTransition = null;
+      this.$refs?.jobDescriptionUnsavedDialog?.close();
+      if (resolve) resolve(Boolean(proceed));
+    },
+
+    async resolveJobDescriptionTransition(choice) {
+      if (!this.jobDescriptionPendingTransition || this.jobDescriptionOperation) return;
+      if (choice === "save") {
+        this.jobDescriptionPendingTransition.error = "";
+        const saved = await this.saveJobDescription({ fromTransition: true });
+        if (saved) this.finishJobDescriptionTransition(true);
+        // 会话失效已由统一 API 跳转登录页，结束待处理决定，不执行原切换。
+        else if (!this.session?.authenticated) this.finishJobDescriptionTransition(false);
+        return;
+      }
+      if (choice === "discard") {
+        if (this.jobDescriptionDetail?.id) this.applyJobDescriptionDetail(this.jobDescriptionDetail);
+        else this.resetJobDescriptionForm();
+      }
+      this.finishJobDescriptionTransition(choice === "discard");
+    },
+
     jobDescriptionContentTabs() {
       return [
         { key: "edit", label: "编辑" },
@@ -68,7 +117,7 @@ export function createAdminJobDescriptionsModule() {
     jobDescriptionContentTabClass(key) {
       const active = String(this.jobDescriptionContentTab || "preview") === String(key || "");
       const classes = [
-        "inline-flex h-8 min-w-16 items-center justify-center rounded-md px-3 text-sm font-semibold transition",
+        "inline-flex min-h-11 min-w-16 items-center justify-center rounded-md px-3 text-sm font-semibold transition",
       ];
       if (active) {
         classes.push("bg-blue-600 text-white shadow-sm");
@@ -119,7 +168,7 @@ export function createAdminJobDescriptionsModule() {
     },
 
     addJobDescriptionRelatedQuiz(quizKey) {
-      if (this.jobDescriptionReadOnly()) return;
+      if (this.jobDescriptionEditorLocked()) return;
       const key = String(quizKey || "").trim();
       if (!key) return;
       const current = this.normalizeJobDescriptionRelatedQuizzes(this.jobDescriptionForm?.related_quizzes);
@@ -128,7 +177,7 @@ export function createAdminJobDescriptionsModule() {
     },
 
     removeJobDescriptionRelatedQuiz(quizKey) {
-      if (this.jobDescriptionReadOnly()) return;
+      if (this.jobDescriptionEditorLocked()) return;
       const key = String(quizKey || "").trim();
       if (!key) return;
       this.jobDescriptionForm.related_quizzes = this.normalizeJobDescriptionRelatedQuizzes(
@@ -142,6 +191,8 @@ export function createAdminJobDescriptionsModule() {
       if (next === "edit") {
         await this.$nextTick();
         this.autosizeJobDescriptionEditor();
+      } else {
+        await this.previewJobDescriptionDraft();
       }
     },
 
@@ -159,14 +210,23 @@ export function createAdminJobDescriptionsModule() {
         git_repo_url: "",
       };
       this.jobDescriptionContentTab = "edit";
+      this.jobDescriptionEditorInitialized = true;
+      this.resetJobDescriptionPreview();
       this.scheduleJobDescriptionEditorAutosize();
     },
 
     async startCreateJobDescription() {
-      this.resetJobDescriptionForm();
-      await this.setAdminCompactTab("job-descriptions", "editor", { scroll: true });
-      await this.$nextTick();
-      this.autosizeJobDescriptionEditor();
+      if (!(await this.confirmJobDescriptionLeave())) return;
+      if (this.jobDescriptionOperation) return;
+      this.jobDescriptionOperation = "loading";
+      try {
+        this.resetJobDescriptionForm();
+        await this.setAdminCompactTab("job-descriptions", "editor", { scroll: true });
+        await this.$nextTick();
+        this.autosizeJobDescriptionEditor();
+      } finally {
+        this.jobDescriptionOperation = "";
+      }
     },
 
     jobDescriptionEditorTitle() {
@@ -174,12 +234,41 @@ export function createAdminJobDescriptionsModule() {
     },
 
     jobDescriptionPreviewHtml() {
-      const detailId = Number(this.jobDescriptionDetail?.id || 0);
-      const formId = Number(this.jobDescriptionForm?.id || 0);
-      if (!detailId || detailId !== formId) {
-        return "";
+      if (this.jobDescriptionPreview?.source !== String(this.jobDescriptionForm?.content_md || "")) return "";
+      return String(this.jobDescriptionPreview?.html || "");
+    },
+
+    resetJobDescriptionPreview(detail = null) {
+      this.jobDescriptionPreview = {
+        html: String(detail?.content_html || ""),
+        source: String(detail?.content_md || ""),
+        loading: false,
+        error: "",
+        requestId: Number(this.jobDescriptionPreview?.requestId || 0) + 1,
+      };
+    },
+
+    async previewJobDescriptionDraft() {
+      const source = String(this.jobDescriptionForm?.content_md || "");
+      const requestId = Number(this.jobDescriptionPreview?.requestId || 0) + 1;
+      this.jobDescriptionPreview = { html: "", source, loading: Boolean(source.trim()), error: "", requestId };
+      if (!source.trim()) return;
+      try {
+        const data = await this.api("/api/admin/job-descriptions/preview", {
+          method: "POST",
+          body: JSON.stringify({ content_md: source }),
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!data || this.jobDescriptionPreview.requestId !== requestId
+            || source !== String(this.jobDescriptionForm?.content_md || "")) return;
+        this.jobDescriptionPreview.html = String(data.content_html || "");
+      } catch (error) {
+        if (this.jobDescriptionPreview.requestId === requestId) {
+          this.jobDescriptionPreview.error = error.message || "预览失败，请重试";
+        }
+      } finally {
+        if (this.jobDescriptionPreview.requestId === requestId) this.jobDescriptionPreview.loading = false;
       }
-      return String(this.jobDescriptionDetail?.content_html || "");
     },
 
     jobDescriptionFormDirty() {
@@ -192,6 +281,7 @@ export function createAdminJobDescriptionsModule() {
         return Boolean(
           String(this.jobDescriptionForm?.title || "").trim()
           || String(this.jobDescriptionForm?.content_md || "").trim()
+          || String(this.jobDescriptionForm?.status || "draft") !== "draft"
           || this.normalizeJobDescriptionRelatedQuizzes(this.jobDescriptionForm?.related_quizzes).length > 0,
         );
       }
@@ -277,12 +367,16 @@ export function createAdminJobDescriptionsModule() {
       if (nextPage === this.currentJobDescriptionsPage()) {
         return;
       }
+      this.jobDescriptions.page = nextPage;
+      this.syncAdminListRoute({ replace: false });
       await this.loadJobDescriptions({ page: nextPage });
     },
 
-    async reloadJobDescriptionsFromFirstPage() {
+    async reloadJobDescriptionsFromFirstPage({ replace = false } = {}) {
       window.clearTimeout(this.jobDescriptionsFilterTimer);
       this.jobDescriptionsFilterTimer = null;
+      this.jobDescriptions.page = 1;
+      this.syncAdminListRoute({ replace });
       await this.loadJobDescriptions({ page: 1 });
     },
 
@@ -290,32 +384,26 @@ export function createAdminJobDescriptionsModule() {
       window.clearTimeout(this.jobDescriptionsFilterTimer);
       this.jobDescriptionsFilterTimer = window.setTimeout(() => {
         this.jobDescriptionsFilterTimer = null;
-        this.loadJobDescriptions({ page: 1 });
+        this.reloadJobDescriptionsFromFirstPage({ replace: true });
       }, 220);
     },
 
     async loadJobDescriptions({ quiet = false, page = null } = {}) {
+      const requestId = ++this.jobDescriptionsRequestId;
       const query = new URLSearchParams();
       const nextPage = this.normalizeJobDescriptionsPage(page, this.jobDescriptions?.page || 1);
       query.set("page", String(nextPage));
       if (this.filters.jobDescriptions.q) query.set("q", this.filters.jobDescriptions.q);
       if (this.filters.jobDescriptions.status) query.set("status", this.filters.jobDescriptions.status);
       const data = await this.api(`/api/admin/job-descriptions?${query.toString()}`, { quiet });
-      if (!data) return;
+      if (!data || requestId !== this.jobDescriptionsRequestId) return;
       this.jobDescriptions = {
         ...(this.jobDescriptions || {}),
         items: Array.isArray(data?.items) ? data.items : [],
         ...data,
       };
-      const formId = Number(this.jobDescriptionForm?.id || 0);
-      const hasDraftInput = Boolean(
-        !formId
-        && (
-          String(this.jobDescriptionForm?.title || "").trim()
-          || String(this.jobDescriptionForm?.content_md || "").trim()
-        ),
-      );
-      if (!formId && !hasDraftInput && !Number(this.jobDescriptionDetail?.id || 0)) {
+      if (!this.jobDescriptionEditorInitialized && !this.jobDescriptionFormDirty()
+          && !this.jobDescriptionOperation && !this.jobDescriptionPendingTransition) {
         const first = this.jobDescriptions.items?.[0];
         if (first?.id) {
           await this.loadJobDescription(first.id, { quiet: true, scroll: false });
@@ -326,8 +414,29 @@ export function createAdminJobDescriptionsModule() {
     async loadJobDescription(id, { quiet = false, scroll = true } = {}) {
       const numericId = Number(id || 0);
       if (!Number.isFinite(numericId) || numericId <= 0) return;
-      const data = await this.api(`/api/admin/job-descriptions/${numericId}`, { quiet });
-      if (!data) return;
+      if (this.jobDescriptionOperation || this.jobDescriptionPendingTransition) return;
+      if (numericId === Number(this.jobDescriptionForm?.id || 0)) {
+        if (scroll) await this.setAdminCompactTab("job-descriptions", "editor", { scroll: true });
+        return;
+      }
+      if (!(await this.confirmJobDescriptionLeave()) || this.jobDescriptionOperation) return;
+      this.jobDescriptionOperation = "loading";
+      try {
+        const data = await this.api(`/api/admin/job-descriptions/${numericId}`, { quiet });
+        if (!data) return;
+        this.applyJobDescriptionDetail(data);
+        this.jobDescriptionContentTab = "preview";
+        if (scroll) await this.setAdminCompactTab("job-descriptions", "editor", { scroll: true });
+        await this.$nextTick();
+        this.autosizeJobDescriptionEditor();
+      } catch (error) {
+        if (quiet) this.showNotice(error.message || "职位加载失败");
+      } finally {
+        this.jobDescriptionOperation = "";
+      }
+    },
+
+    applyJobDescriptionDetail(data) {
       this.jobDescriptionDetail = data;
       this.jobDescriptionForm = {
         id: Number(data.id || 0),
@@ -340,18 +449,15 @@ export function createAdminJobDescriptionsModule() {
         source_path: String(data.source_path || ""),
         git_repo_url: String(data.git_repo_url || ""),
       };
-      this.jobDescriptionContentTab = "preview";
-      if (scroll) {
-        await this.setAdminCompactTab("job-descriptions", "editor", { scroll: true });
-      }
-      await this.$nextTick();
-      this.autosizeJobDescriptionEditor();
+      this.jobDescriptionEditorInitialized = true;
+      this.resetJobDescriptionPreview(data);
     },
 
-    async saveJobDescription() {
+    async saveJobDescription({ fromTransition = false } = {}) {
+      if (this.jobDescriptionOperation || (this.jobDescriptionPendingTransition && !fromTransition)) return false;
       if (this.jobDescriptionReadOnly()) {
         this.showNotice("仓库来源职位请在 Git 仓库中修改");
-        return;
+        return false;
       }
       const payload = {
         title: String(this.jobDescriptionForm?.title || "").trim(),
@@ -360,47 +466,73 @@ export function createAdminJobDescriptionsModule() {
         related_quizzes: this.normalizeJobDescriptionRelatedQuizzes(this.jobDescriptionForm?.related_quizzes),
       };
       if (!payload.title) {
+        if (fromTransition && this.jobDescriptionPendingTransition) {
+          this.jobDescriptionPendingTransition.error = "岗位名称不能为空，请继续编辑后填写";
+        }
         this.showNotice("岗位名称不能为空");
-        return;
+        return false;
       }
       const id = Number(this.jobDescriptionForm?.id || 0);
-      const data = await this.api(id > 0 ? `/api/admin/job-descriptions/${id}` : "/api/admin/job-descriptions", {
-        method: id > 0 ? "PUT" : "POST",
-        body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!data) return;
-      this.jobDescriptionDetail = data;
-      this.jobDescriptionForm = {
-        id: Number(data.id || 0),
-        title: String(data.title || ""),
-        content_md: String(data.content_md || ""),
-        status: String(data.status || "draft"),
-        related_quizzes: this.normalizeJobDescriptionRelatedQuizzes(data.related_quizzes),
-        source_kind: String(data.source_kind || "manual"),
-        jd_key: String(data.jd_key || ""),
-        source_path: String(data.source_path || ""),
-        git_repo_url: String(data.git_repo_url || ""),
-      };
-      await this.$nextTick();
-      this.autosizeJobDescriptionEditor();
-      this.showNotice(id > 0 ? "职位已保存" : "职位已创建");
-      await this.loadJobDescriptions({ quiet: true, page: id > 0 ? this.currentJobDescriptionsPage() : 1 });
+      this.jobDescriptionOperation = "saving";
+      try {
+        const data = await this.api(id > 0 ? `/api/admin/job-descriptions/${id}` : "/api/admin/job-descriptions", {
+          method: id > 0 ? "PUT" : "POST",
+          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!data?.id) {
+          if (fromTransition && this.jobDescriptionPendingTransition) {
+            this.jobDescriptionPendingTransition.error = "保存未成功，当前内容已保留";
+          }
+          return false;
+        }
+        this.applyJobDescriptionDetail(data);
+        await this.$nextTick();
+        this.autosizeJobDescriptionEditor();
+        this.showNotice(id > 0 ? "职位已保存" : "职位已创建");
+        try {
+          await this.loadJobDescriptions({ quiet: true, page: id > 0 ? this.currentJobDescriptionsPage() : 1 });
+        } catch (_error) {
+          this.showNotice("职位已保存，列表刷新失败，请稍后重试");
+        }
+        return Boolean(this.session?.authenticated);
+      } catch (error) {
+        // api 已显示请求错误；失败不能清空草稿或继续原切换。
+        if (fromTransition && this.jobDescriptionPendingTransition) {
+          this.jobDescriptionPendingTransition.error = error.message || "保存失败，请重试";
+        }
+        return false;
+      } finally {
+        this.jobDescriptionOperation = "";
+      }
     },
 
     async deleteJobDescription() {
+      if (this.jobDescriptionOperation || this.jobDescriptionPendingTransition) return;
       const id = Number(this.jobDescriptionForm?.id || 0);
       if (!id) return;
       if (this.jobDescriptionReadOnly()) {
         this.showNotice("仓库来源职位请在 Git 仓库中归档或移除");
         return;
       }
-      if (!window.confirm("确定删除该职位吗？")) return;
-      await this.api(`/api/admin/job-descriptions/${id}`, { method: "DELETE" });
-      this.showNotice("职位已删除");
-      this.resetJobDescriptionForm();
-      await this.loadJobDescriptions({ quiet: true, page: 1 });
-      await this.setAdminCompactTab("job-descriptions", "list", { scroll: true });
+      const message = this.jobDescriptionFormDirty()
+        ? "确定删除该职位吗？未保存的更改也会被放弃。" : "确定删除该职位吗？";
+      if (!window.confirm(message)) return;
+      this.jobDescriptionOperation = "deleting";
+      try {
+        const data = await this.api(`/api/admin/job-descriptions/${id}`, { method: "DELETE" });
+        if (!data?.ok) return;
+        this.showNotice("职位已删除");
+        this.resetJobDescriptionForm();
+        this.jobDescriptions.page = 1;
+        this.syncAdminListRoute({ replace: true });
+        await this.loadJobDescriptions({ quiet: true, page: 1 });
+        await this.setAdminCompactTab("job-descriptions", "list", { scroll: true });
+      } catch (error) {
+        if (!this.jobDescriptionForm?.id) this.showNotice("职位已删除，列表刷新失败，请稍后重试");
+      } finally {
+        this.jobDescriptionOperation = "";
+      }
     },
   };
 }

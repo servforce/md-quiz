@@ -1518,7 +1518,7 @@ def test_admin_quiz_list_sorts_by_update_time_or_respondent_count_and_excludes_u
     time_items = by_time.json()["items"]
     assert [item["quiz_key"] for item in time_items] == quiz_keys
     assert [item["updated_at"][:10] for item in time_items] == ["2026-01-01", "2026-01-02", "2026-01-03"]
-    assert by_time.json()["filters"] == {"q": "", "sort_by": "updated_at", "sort_order": "asc"}
+    assert by_time.json()["filters"] == {"q": "", "sort_by": "updated_at", "sort_order": "asc", "public_invite": ""}
     assert by_time_desc.status_code == 200
     assert [item["quiz_key"] for item in by_time_desc.json()["items"]] == list(reversed(quiz_keys))
 

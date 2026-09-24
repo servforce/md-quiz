@@ -3,18 +3,18 @@
 @source "../../admin/**/*.js";
 
 :root {
-  --admin-bg: #f4f8ff;
+  --admin-bg: oklch(0.974 0.007 255);
   --admin-ink: #10233f;
-  --admin-panel: rgba(255, 255, 255, 0.9);
-  --admin-panel-strong: rgba(255, 255, 255, 0.97);
-  --admin-border: rgba(37, 99, 235, 0.16);
+  --admin-panel: oklch(0.998 0.002 255);
+  --admin-panel-strong: oklch(0.992 0.004 255);
+  --admin-border: oklch(0.916 0.014 255);
   --admin-brand: #2563eb;
   --admin-brand-strong: #1d4ed8;
   --admin-accent: #16a34a;
   --admin-muted: #64748b;
   --admin-danger: #e11d48;
   --admin-warning: #d97706;
-  --admin-shadow: 0 30px 80px rgba(15, 23, 42, 0.08);
+  --admin-shadow: 0 1px 3px oklch(0.3 0.02 255 / 0.035);
   --radius-2xl: 0.875rem;
   --radius-3xl: 1rem;
 }
@@ -28,11 +28,8 @@
 
   html {
     min-height: 100%;
-    background:
-      radial-gradient(1200px 640px at 0% 0%, rgba(37, 99, 235, 0.16), transparent 58%),
-      radial-gradient(1100px 680px at 100% 0%, rgba(22, 163, 74, 0.14), transparent 56%),
-      linear-gradient(180deg, #f7fbff 0%, #eef5ff 54%, #f5fbf7 100%);
-    background-attachment: fixed, fixed, fixed;
+    background: linear-gradient(110deg, oklch(0.964 0.017 255), var(--admin-bg) 55%, oklch(0.976 0.012 160));
+    background-attachment: fixed;
   }
 
   body {
@@ -62,6 +59,15 @@
 
   a {
     color: inherit;
+  }
+
+  :is(a, button, input, select, textarea, summary):focus-visible {
+    outline: 2px solid var(--admin-brand);
+    outline-offset: 3px;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
   }
 
   [x-cloak] {

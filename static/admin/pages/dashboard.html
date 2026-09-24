@@ -1,0 +1,57 @@
+<div class="min-w-0 space-y-5 pb-6">
+  <header class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-5 sm:px-6">
+    <div>
+      <h2 class="text-2xl font-semibold tracking-tight text-slate-900">待处理与近期动态</h2>
+      <p class="mt-1 text-sm text-slate-500" x-text="dashboardWindowLabel()"></p>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-slate-500" x-show="dashboard?.generated_at" x-text="'更新于 ' + formatDateTime(dashboard?.generated_at)"></span>
+      <button type="button" class="min-h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 disabled:opacity-50" :disabled="dashboardLoading" @click="loadDashboard" x-text="dashboardLoading ? '正在更新…' : '刷新'"></button>
+    </div>
+  </header>
+  <p x-show="dashboardError" x-text="dashboardError" role="alert" class="mx-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:mx-6"></p>
+  <dl class="grid grid-cols-1 divide-y divide-slate-200 border-y border-slate-200 bg-slate-50/70 sm:grid-cols-3 sm:divide-x sm:divide-y-0" :aria-busy="dashboardLoading">
+    <div class="flex items-center justify-between gap-3 px-6 py-4"><div><dt class="font-medium text-slate-700">待处理答卷</dt><dd class="mt-1 text-xs text-slate-500">全部已完成、尚未处理</dd></div><dd class="text-2xl font-semibold tabular-nums text-blue-700" x-text="dashboard ? formatNumber(dashboard.unhandled.total) : '—'"></dd></div>
+    <div class="flex items-center justify-between gap-3 px-6 py-4"><div><dt class="font-medium text-slate-700">近七日完成</dt><dd class="mt-1 text-xs text-slate-500">按答题结束时间</dd></div><dd class="text-2xl font-semibold tabular-nums text-slate-900" x-text="dashboard ? formatNumber(dashboard.completed.total) : '—'"></dd></div>
+    <div class="flex items-center justify-between gap-3 px-6 py-4"><div><dt class="font-medium text-slate-700">近七日失败任务</dt><dd class="mt-1 text-xs text-slate-500">按任务结束时间</dd></div><dd class="text-2xl font-semibold tabular-nums" :class="dashboard?.failed_jobs?.total ? 'text-amber-700' : 'text-slate-900'" x-text="dashboard ? formatNumber(dashboard.failed_jobs.total) : '—'"></dd></div>
+  </dl>
+  <div class="grid min-w-0 grid-cols-1 gap-5 px-4 sm:px-6 xl:grid-cols-2">
+    <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <header class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><h3 class="font-semibold text-slate-900">等待处理</h3><a href="/admin/assignments?handled=unhandled&amp;status=finished&amp;start_from=&amp;end_to=" @click="go($el.href,$event)" class="text-sm font-medium text-blue-700">查看全部</a></header>
+      <div class="divide-y divide-slate-100">
+        <template x-for="item in dashboard?.unhandled?.items || []" :key="item.token">
+          <a :href="item.href" @click="go(item.href,$event)" class="flex min-w-0 items-center justify-between gap-3 px-5 py-4 transition hover:bg-blue-50/60 focus-visible:outline-2 focus-visible:outline-blue-600">
+            <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="font-semibold text-slate-900" x-text="item.candidate_name || '未命名候选人'"></span><span x-show="item.candidate_deleted" class="text-xs text-slate-500">候选人已删除</span></div><div class="mt-1 truncate text-sm text-slate-600" x-text="item.quiz_title || item.quiz_key"></div></div>
+            <div class="shrink-0 text-right"><div class="text-xs tabular-nums text-slate-500" x-text="formatDateTime(item.finished_at) || '结束时间未记录'"></div><span class="mt-1 block text-sm font-medium text-blue-700">查看答卷 →</span></div>
+          </a>
+        </template>
+        <p x-show="dashboard && !dashboard.unhandled.items.length" class="px-5 py-10 text-sm text-slate-500">目前没有待处理答卷。</p>
+        <p x-show="!dashboard && dashboardLoading" class="px-5 py-10 text-sm text-slate-500">正在读取待处理结果…</p>
+      </div>
+    </section>
+    <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <header class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><h3 class="font-semibold text-slate-900">近期完成</h3><span class="text-xs text-slate-500">最近六条</span></header>
+      <div class="divide-y divide-slate-100">
+        <template x-for="item in dashboard?.completed?.items || []" :key="item.token">
+          <a :href="item.href" @click="go(item.href,$event)" class="flex min-w-0 items-center justify-between gap-3 px-5 py-4 transition hover:bg-blue-50/60 focus-visible:outline-2 focus-visible:outline-blue-600">
+            <div class="min-w-0"><div class="font-semibold text-slate-900" x-text="item.candidate_name || '未命名候选人'"></div><div class="mt-1 truncate text-sm text-slate-600" x-text="item.quiz_title || item.quiz_key"></div></div><div class="shrink-0 text-xs tabular-nums text-slate-500" x-text="formatDateTime(item.finished_at)"></div>
+          </a>
+        </template>
+        <p x-show="dashboard && !dashboard.completed.items.length" class="px-5 py-10 text-sm text-slate-500">近七日没有已完成答卷。</p>
+        <p x-show="!dashboard && dashboardLoading" class="px-5 py-10 text-sm text-slate-500">正在读取近期结果…</p>
+      </div>
+    </section>
+    <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white xl:col-span-2">
+      <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><h3 class="font-semibold text-slate-900">需要排查的任务</h3><span class="text-xs text-slate-500">近七日最新六条失败记录</span></header>
+      <div class="divide-y divide-slate-100">
+        <template x-for="job in dashboard?.failed_jobs?.items || []" :key="job.id">
+          <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+            <div class="min-w-0"><div class="font-medium text-slate-900" x-text="dashboardJobLabel(job.kind)"></div><div class="mt-1 break-all font-mono text-xs text-slate-500" x-text="job.id"></div></div>
+            <div class="flex flex-wrap items-center gap-4 text-sm"><span class="text-xs tabular-nums text-slate-500" x-text="formatDateTime(job.finished_at)"></span><span class="text-xs text-slate-500" x-text="'已尝试 ' + job.attempts + ' 次'"></span><a :href="job.href" @click="go(job.href,$event)" class="inline-flex min-h-11 items-center font-medium text-blue-700">查看相关页面 →</a></div>
+          </div>
+        </template>
+        <p x-show="dashboard && !dashboard.failed_jobs.items.length" class="px-5 py-8 text-sm text-slate-500">近七日没有记录到已结束的失败任务。</p>
+      </div>
+    </section>
+  </div>
+</div>

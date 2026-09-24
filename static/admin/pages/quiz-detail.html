@@ -1,38 +1,9 @@
-<div x-show="route.name === 'quiz-detail'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
-            <div
-              x-show="shouldShowAdminCompactTabs('quiz-detail')"
-              x-cloak
-              data-admin-compact-tabs="quiz-detail"
-              class="hidden admin-compact-tabs md:block xl:hidden"
-            >
-              <div
-                class="admin-compact-tabs__track"
-                :style="route.name === 'quiz-detail' ? { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' } : {}"
-                role="tablist"
-                aria-label="测验详情内容切换"
-              >
-                <template x-for="tab in adminCompactTabs('quiz-detail')" :key="tab.id">
-                  <button
-                    type="button"
-                    role="tab"
-                    @click="setAdminCompactTab('quiz-detail', tab.id)"
-                    :class="adminCompactTab('quiz-detail') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
-                    :aria-selected="String(adminCompactTab('quiz-detail') === tab.id)"
-                    class="admin-compact-tab"
-                    x-text="tab.label"
-                  ></button>
-                </template>
-              </div>
-            </div>
-
-              <section
-                x-show="adminCompactPanelVisible('quiz-detail', 'content')"
-                class="admin-surface min-w-0 rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
-              >
+<div x-show="route.name === 'quiz-detail'" class="min-w-0 space-y-4">
+  <header class="admin-surface min-w-0 rounded-xl p-4 sm:p-5">
               <div class="flex flex-col gap-3 pb-2 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
-                    <h2 class="truncate text-2xl font-semibold tracking-[-0.03em] text-slate-900" x-text="quizDetail.quiz?.title || quizDetail.quiz?.quiz_key"></h2>
+                    <h2 class="break-words text-2xl font-semibold tracking-[-0.03em] text-slate-900" x-text="quizDetail.quiz?.title || quizDetail.quiz?.quiz_key"></h2>
                     <span class="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700" x-text="quizDetail.quiz?.quiz_key"></span>
                   </div>
                   <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
@@ -49,35 +20,25 @@
                     </template>
                   </div>
                 </div>
-                <button @click="togglePublicInvite" type="button" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100">
+                <button @click="togglePublicInvite" type="button" class="shrink-0 self-start whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100">
                   <span x-text="quizDetail.quiz?.public_invite_enabled ? '关闭公开邀约' : '开启公开邀约'"></span>
                 </button>
               </div>
 
+  </header>
+  <div class="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="测验详情内容切换" @keydown="handleQuizDetailTabKeydown($event)">
+    <template x-for="tab in [{id:'content',label:'测验内容'},{id:'analytics',label:'测验分析'},{id:'history',label:'版本历史'}]" :key="tab.id">
+      <button type="button" role="tab" :id="'quiz-detail-tab-' + tab.id" :aria-controls="'quiz-detail-panel-' + tab.id" :aria-selected="String(quizDetailTab() === tab.id)" :tabindex="quizDetailTab() === tab.id ? 0 : -1" @click="setQuizDetailTab(tab.id)" class="shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition" :class="quizDetailTab() === tab.id ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-blue-700'" x-text="tab.label"></button>
+    </template>
+  </div>
+  <section x-show="quizDetailPanelVisible('content')" id="quiz-detail-panel-content" role="tabpanel" aria-labelledby="quiz-detail-tab-content" class="admin-surface @container/quiz-content min-w-0 rounded-xl p-4 sm:p-5">
+
               <div class="mt-3 grid gap-4">
-                <div class="admin-quiz-overview-card overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/70">
-                  <div class="admin-quiz-summary-split">
-                    <section class="admin-quiz-summary-score px-4 py-4 md:px-5">
-                      <div class="text-xs uppercase tracking-[0.18em] text-slate-500">总分</div>
-                      <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="quizDetail.stats?.total_points || 0"></div>
-                    </section>
-                    <section x-show="traitDimensions().length" class="admin-quiz-summary-traits px-4 py-4 md:px-5">
-                      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div class="text-xs uppercase tracking-[0.18em] text-slate-500">Traits 维度</div>
-                        <div class="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600">
-                          <span x-text="traitDimensions().length"></span>
-                          个维度
-                        </div>
-                      </div>
-                      <div class="mt-4 flex flex-wrap gap-2.5">
-                        <template x-for="dimension in traitDimensions()" :key="dimension.name">
-                          <span :style="traitBadgeStyle(dimension.name)" class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold">
-                            <span :style="traitDotStyle(dimension.name)" class="h-2 w-2 rounded-full"></span>
-                            <span x-text="dimension.name"></span>
-                          </span>
-                        </template>
-                      </div>
-                    </section>
+                <div class="flex flex-wrap items-start gap-x-6 gap-y-3 border-b border-slate-200 pb-4">
+                  <div class="flex items-baseline gap-2 text-sm text-slate-500">总分 <strong class="text-2xl font-semibold tabular-nums text-slate-900" x-text="quizDetail.stats?.total_points || 0"></strong></div>
+                  <div x-show="traitDimensions().length" class="flex min-w-0 flex-wrap items-center gap-2">
+                    <span class="text-xs text-slate-500">Traits 维度</span>
+                    <template x-for="dimension in traitDimensions()" :key="dimension.name"><span :style="traitBadgeStyle(dimension.name)" class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"><span :style="traitDotStyle(dimension.name)" class="h-2 w-2 rounded-full"></span><span x-text="dimension.name"></span></span></template>
                   </div>
                 </div>
                 <div
@@ -107,14 +68,14 @@
                       <button
                         type="button"
                         @click="copyAssignmentQr({ qr_url: quizDetail.quiz?.public_invite_qr_url })"
-                        class="admin-public-invite-qr-button overflow-hidden rounded-xl transition hover:opacity-85"
+                        class="shrink-0 overflow-hidden rounded-xl transition hover:opacity-85"
                         title="点击复制二维码"
                         aria-label="点击复制公开邀约二维码"
                       >
                         <img
                           :src="quizDetail.quiz?.public_invite_qr_url"
                           alt="公开邀约二维码"
-                          class="admin-public-invite-qr rounded-xl object-contain"
+                          class="h-24 w-24 rounded-lg object-contain"
                         />
                       </button>
                     </div>
@@ -124,7 +85,7 @@
 
               <article
                 x-show="quizDetail.selected_quiz_version?.spec?.welcome_image"
-                class="relative mt-5 overflow-hidden rounded-xl border border-blue-100/90 bg-slate-950"
+                class="relative mt-4 overflow-hidden rounded-xl border border-blue-100/90 bg-slate-950"
               >
                 <img
                   :src="quizDetail.selected_quiz_version?.spec?.welcome_image || ''"
@@ -147,7 +108,7 @@
                   <div>
                     <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">测验浏览</div>
                     <h3 class="mt-1 text-lg font-semibold tracking-[-0.03em] text-slate-900">按题预览当前选择版本</h3>
-                    <p class="mt-1 text-sm text-slate-600">恢复卡片式浏览视图，直接查看题干、选项和评分标准。</p>
+                    <p class="mt-1 text-sm text-slate-600">查看题干、选项和评分标准。</p>
                   </div>
                   <div class="flex flex-wrap gap-2 text-xs text-slate-500">
                     <template x-for="(count, type) in (quizDetail.stats?.counts_by_type || {})" :key="type">
@@ -163,7 +124,7 @@
                   <template x-for="(question, index) in quizQuestions()" :key="question.qid || index">
                     <article class="border-b border-blue-100/90 last:border-b-0">
                       <div class="border-b border-slate-200/80 bg-blue-50/70 px-4 py-3">
-                        <div class="flex items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
                           <div class="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden">
                             <span class="shrink-0 text-[17px] font-black tracking-[-0.03em] text-slate-900" x-text="question.label || question.qid || ('Q' + (index + 1))"></span>
                             <span class="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700" x-text="questionTypeLabel(question.type)"></span>
@@ -187,11 +148,11 @@
                             <template x-for="option in (question.options || [])" :key="`${question.qid || index}-${option.key || option.text || ''}`">
                               <div
                                 :class="option.correct ? 'bg-emerald-50/70' : ''"
-                                class="flex items-center gap-2.5 px-3 py-2.5"
+                                class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2.5 px-3 py-2.5 @min-[40rem]/quiz-content:flex @min-[40rem]/quiz-content:items-center"
                               >
                                 <span class="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-white px-1.5 text-[11px] font-semibold text-blue-700" x-text="option.key || '-'"></span>
                                 <div class="quiz-rich admin-markdown min-w-0 flex-1 text-sm leading-5 text-slate-700" x-html="option.text_html || ''"></div>
-                                <div x-show="optionTraits(option).length" class="ml-auto flex flex-wrap justify-end gap-1.5 pl-2">
+                                <div x-show="optionTraits(option).length" class="col-start-2 flex min-w-0 flex-wrap gap-1.5 @min-[40rem]/quiz-content:ml-auto @min-[40rem]/quiz-content:justify-end">
                                     <template x-for="trait in optionTraits(option)" :key="`${option.key || ''}-${trait.name}`">
                                       <span :style="traitBadgeStyle(trait.name)" class="rounded-full border px-2 py-0.5 text-[11px] font-medium">
                                         <span x-text="trait.name"></span>
@@ -199,7 +160,7 @@
                                       </span>
                                     </template>
                                 </div>
-                                <span x-show="option.correct" class="shrink-0 rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-700">正确</span>
+                                <span x-show="option.correct" class="col-start-2 w-fit shrink-0 rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-700">正确</span>
                               </div>
                             </template>
                           </div>
@@ -246,7 +207,7 @@
             <section
               x-show="quizDetailPanelVisible('analytics') || quizDetailPanelVisible('history')"
               x-cloak
-              class="admin-surface admin-sticky-aside rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface @container/quiz-data min-w-0 rounded-xl p-4 sm:p-5"
             >
               <div class="flex flex-col gap-3">
                 <div class="flex items-start justify-between gap-3">
@@ -272,28 +233,10 @@
                   </div>
                 </div>
 
-                <div x-show="!isAdminCompactLayout" class="flex w-full gap-2" role="tablist" aria-label="测验详情侧栏">
-                  <button
-                    type="button"
-                    role="tab"
-                    @click="setQuizDetailSideTab('analytics')"
-                    :aria-selected="String(quizDetailPanelVisible('analytics'))"
-                    :class="quizDetailPanelVisible('analytics') ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-blue-100 text-slate-500 hover:text-blue-700'"
-                    class="flex-1 rounded-lg border-b-2 px-3 py-2 text-sm font-semibold transition"
-                  >测验分析</button>
-                  <button
-                    type="button"
-                    role="tab"
-                    @click="setQuizDetailSideTab('history')"
-                    :aria-selected="String(quizDetailPanelVisible('history'))"
-                    :class="quizDetailPanelVisible('history') ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-blue-100 text-slate-500 hover:text-blue-700'"
-                    class="flex-1 rounded-lg border-b-2 px-3 py-2 text-sm font-semibold transition"
-                  >版本历史</button>
-                </div>
               </div>
 
-              <div class="admin-sticky-aside__body">
-                <section x-show="quizDetailPanelVisible('analytics')" x-cloak class="mt-4 space-y-6">
+              <div class="min-w-0">
+                <section x-show="quizDetailPanelVisible('analytics')" x-cloak id="quiz-detail-panel-analytics" role="tabpanel" aria-labelledby="quiz-detail-tab-analytics" class="mt-4 min-w-0 space-y-6">
                   <div x-show="quizAnalyticsDetail.quiz?.quiz_key" class="space-y-6">
                     <div class="py-3">
                       <div class="flex flex-wrap gap-2">
@@ -308,7 +251,7 @@
                         </template>
                       </div>
 
-                      <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div class="mt-3 grid max-w-2xl gap-2 sm:grid-cols-2">
                         <input
                           x-model="filters.quizAnalytics.start_date"
                           @change="applyQuizAnalyticsCustomDateRangeIfReady()"
@@ -328,7 +271,7 @@
                         x-show="shouldShowQuizAnalyticsVersionSelect()"
                         :value="String(quizAnalyticsDetail.filters?.version_id || '')"
                         @change="changeQuizAnalyticsVersionId($event.target.value)"
-                        class="mt-4 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-emerald-300"
+                        class="mt-4 w-full max-w-xs rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-emerald-300"
                         aria-label="选择分析版本"
                       >
                         <template x-for="version in quizAnalyticsAvailableVersions()" :key="version.id">
@@ -337,7 +280,8 @@
                       </select>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-x-4 gap-y-3 border-b border-slate-200 py-3">
+                    <p class="text-xs leading-6 text-slate-500">已完成记录按完成时间统计；进行中和判卷中记录按进入答题时间统计。</p>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-slate-200 py-3 @min-[40rem]/quiz-data:grid-cols-5">
                       <template x-for="card in quizAnalyticsSummaryCards()" :key="card.key">
                         <article class="py-1">
                           <div class="text-[11px] font-semibold text-slate-500" x-text="card.label"></div>
@@ -353,24 +297,28 @@
                       </div>
                       <template x-for="group in quizAnalyticsDistributionGroups()" :key="group.score_max_label">
                         <article class="border-t border-slate-200 pt-3">
-                          <div class="flex items-center justify-between gap-3">
+                          <div class="flex flex-wrap items-center justify-between gap-3">
                             <div class="text-sm font-semibold text-slate-900" x-text="group.score_max_label"></div>
                             <div class="text-[11px] font-medium tabular-nums text-slate-500" x-text="(group.total_count || 0) + ' 份'" ></div>
                           </div>
-                          <div class="overflow-x-auto py-3">
-                            <div :class="quizAnalyticsDistributionColumnsClass()">
+                          <div class="py-3">
+                            <div class="grid min-w-0 gap-2 @min-[40rem]/quiz-data:flex @min-[40rem]/quiz-data:items-end">
                               <template x-for="row in quizAnalyticsDistributionRows(group)" :key="row.key">
                                 <button
                                   type="button"
                                   x-show="row.kind === 'bucket'"
                                   @click="toggleQuizAnalyticsScoreFilter(group, row)"
                                   :class="quizAnalyticsDistributionColumnButtonClass(group, row)"
+                                  :disabled="Number(row.count || 0) <= 0"
+                                  :aria-pressed="String(quizAnalyticsDistributionRowIsActive(group, row))"
+                                  :aria-label="row.label + '，' + (row.count || 0) + ' 份'"
+                                  class="grid min-w-0 grid-cols-[3.5rem_minmax(0,1fr)_2rem] items-center gap-2 rounded-lg border px-2 py-1 text-center transition @min-[40rem]/quiz-data:flex @min-[40rem]/quiz-data:flex-1 @min-[40rem]/quiz-data:flex-col @min-[40rem]/quiz-data:px-1"
                                 >
-                                  <div class="text-[11px] font-semibold tabular-nums text-slate-700" x-text="row.count || 0"></div>
-                                  <div :class="quizAnalyticsDistributionColumnTrackClass(group, row)">
-                                    <div class="w-full rounded-lg bg-linear-to-t from-blue-500 via-sky-500 to-emerald-500" :style="quizAnalyticsDistributionColumnStyle(group, row)"></div>
+                                  <div class="order-3 text-[11px] font-semibold tabular-nums text-slate-700 @min-[40rem]/quiz-data:order-1" x-text="row.count || 0"></div>
+                                  <div :class="quizAnalyticsDistributionColumnTrackClass(group, row)" class="order-2 flex h-3 w-full min-w-0 items-end overflow-hidden rounded border @min-[40rem]/quiz-data:h-40 @min-[40rem]/quiz-data:px-1 @min-[40rem]/quiz-data:py-1">
+                                    <div class="h-full w-[var(--distribution-percent)] rounded bg-blue-500 @min-[40rem]/quiz-data:h-[var(--distribution-percent)] @min-[40rem]/quiz-data:w-full" :style="quizAnalyticsDistributionColumnStyle(group, row)"></div>
                                   </div>
-                                  <div class="text-center text-[11px] font-mono leading-4 text-slate-500" x-text="row.label"></div>
+                                  <div class="order-1 text-left font-mono text-[11px] leading-4 text-slate-500 @min-[40rem]/quiz-data:order-3 @min-[40rem]/quiz-data:text-center" x-text="row.label"></div>
                                 </button>
                               </template>
                             </div>
@@ -401,7 +349,7 @@
                             class="grid w-full grid-cols-[minmax(0,1fr)_3rem] items-center gap-3 rounded-lg py-3 text-left transition"
                           >
                             <div class="min-w-0">
-                              <div class="flex items-center justify-between gap-3">
+                              <div class="flex flex-wrap items-center justify-between gap-3">
                                 <span class="font-mono text-sm font-semibold text-slate-900" x-text="row.combination"></span>
                                 <span class="text-xs font-semibold tabular-nums text-slate-600" x-text="quizAnalyticsPercentLabel(row.percent)"></span>
                               </div>
@@ -437,21 +385,21 @@
 
                       <div class="divide-y divide-slate-200 border-b border-t border-slate-200">
                         <template x-for="item in quizAnalyticsVisibleItems()" :key="item.attempt_id">
-                          <article class="px-3 py-3">
-                            <div class="flex items-start justify-between gap-3">
+                          <article class="grid min-w-0 gap-2 px-3 py-3 @min-[40rem]/quiz-data:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @min-[52rem]/quiz-data:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] @min-[52rem]/quiz-data:items-center">
+                            <div class="flex min-w-0 items-start justify-between gap-3">
                               <div class="min-w-0">
                                 <div class="truncate font-semibold text-slate-900" :title="item.candidate_name" x-text="item.candidate_name"></div>
                                 <div class="mt-1 truncate font-mono text-[11px] text-slate-400" :title="item.token" x-text="item.token"></div>
                               </div>
-                              <button type="button" @click="go(item.detail_url)" class="shrink-0 rounded-lg border border-blue-100 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">详情</button>
+                              <a :href="item.detail_url" @click="go($el.href, $event)" class="shrink-0 rounded-lg border border-blue-100 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-blue-50 hover:text-blue-700">详情</a>
                             </div>
-                            <div class="mt-3 flex flex-wrap items-center gap-1.5">
+                            <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                               <span class="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600" x-text="quizAnalyticsVersionLabel(item)"></span>
                               <span :class="quizAnalyticsStatusBadgeClass(item)" x-text="item.status_label"></span>
                               <span :class="quizAnalyticsSourceBadgeClass(item)" x-text="item.source_label"></span>
                               <span :class="quizAnalyticsResultBadgeClass(item)" x-text="quizAnalyticsResultDisplay(item)"></span>
                             </div>
-                            <div class="mt-2 text-[11px] leading-5 text-slate-500">
+                            <div class="text-[11px] leading-5 tabular-nums text-slate-500">
                               <span x-text="'开始 ' + (item.entered_at_display || '-')"></span>
                               <span class="mx-1 text-slate-300">·</span>
                               <span x-text="'完成 ' + (item.finished_at_display || '-')"></span>
@@ -472,7 +420,7 @@
                   </div>
                 </section>
 
-                <section x-show="quizDetailPanelVisible('history')" x-cloak class="mt-4">
+                <section x-show="quizDetailPanelVisible('history')" x-cloak id="quiz-detail-panel-history" role="tabpanel" aria-labelledby="quiz-detail-tab-history" class="mt-4">
                   <div class="divide-y divide-slate-200 border-b border-t border-slate-200">
                     <template x-for="version in quizDetail.quiz_version_history || []" :key="version.id">
                       <button
