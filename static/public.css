@@ -2283,6 +2283,10 @@
     --tw-tracking: 0.08em;
     letter-spacing: 0.08em;
   }
+  .tracking-\[0\.12em\] {
+    --tw-tracking: 0.12em;
+    letter-spacing: 0.12em;
+  }
   .tracking-\[0\.14em\] {
     --tw-tracking: 0.14em;
     letter-spacing: 0.14em;

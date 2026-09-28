@@ -36,7 +36,10 @@ COPY static/admin/ ./static/admin/
 COPY static/public/ ./static/public/
 COPY static/assets/ ./static/assets/
 COPY static/vendor/ ./static/vendor/
+COPY static/logo.svg ./static/logo.svg
 COPY static/logo.png ./static/logo.png
+COPY static/logo-mono.svg ./static/logo-mono.svg
+COPY static/logo-mono.png ./static/logo-mono.png
 COPY --from=frontend-builder /app/static/admin.css ./static/admin.css
 COPY --from=frontend-builder /app/static/public.css ./static/public.css
 COPY --from=frontend-builder /app/static/assets/js/alpine.min.js ./static/assets/js/alpine.min.js

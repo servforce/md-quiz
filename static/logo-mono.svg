@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" color="#171717" role="img" aria-labelledby="title">
+  <title id="title">葡萄标识 · 单色版</title>
+  <defs>
+    <mask id="grape-seams" maskUnits="userSpaceOnUse" x="0" y="0" width="96" height="96">
+      <path d="M0 0H96V96H0ZM31.900 40.000A16.100 16.100 0 0 0 64.100 40.000A1.1 1.1 0 0 0 61.900 40.000A13.900 13.900 0 0 1 34.100 40.000A1.1 1.1 0 0 0 31.900 40.000ZM23.765 55.749A15.100 15.100 0 0 0 33.382 54.685A1.1 1.1 0 0 0 32.452 52.691A12.900 12.900 0 0 1 24.237 53.601A1.1 1.1 0 0 0 23.765 55.749ZM62.618 54.685A15.100 15.100 0 0 0 70.053 56.063A1.1 1.1 0 0 0 69.900 53.869A12.900 12.900 0 0 1 63.548 52.691A1.1 1.1 0 0 0 62.618 54.685ZM47.369 68.661A15.100 15.100 0 0 1 35.000 75.100A1.1 1.1 0 0 1 35.000 72.900A12.900 12.900 0 0 0 45.567 67.399A1.1 1.1 0 0 1 47.369 68.661ZM59.000 75.100A15.100 15.100 0 0 1 46.631 68.661A1.1 1.1 0 0 1 48.433 67.399A12.900 12.900 0 0 0 59.000 72.900A1.1 1.1 0 0 1 59.000 75.100Z" fill="#FFFFFF" fill-rule="evenodd"/>
+    </mask>
+  </defs>
+  <path d="M48 31C48 20 57 10 69 11" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M48 25C48 12 37 7 26 10C25 22 34 31 48 25Z" fill="currentColor"/>
+  <g fill="currentColor" stroke="currentColor" stroke-width="1.2" mask="url(#grape-seams)">
+    <circle cx="48" cy="57" r="15"/>
+    <circle cx="47" cy="78" r="14"/>
+    <circle cx="35" cy="60" r="14"/>
+    <circle cx="59" cy="60" r="14"/>
+    <circle cx="27" cy="41" r="14"/>
+    <circle cx="69" cy="41" r="14"/>
+    <circle cx="48" cy="40" r="15"/>
+  </g>
+</svg>

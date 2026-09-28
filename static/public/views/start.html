@@ -1,6 +1,10 @@
 <section x-show="viewCard === 'start'" class="mx-auto max-w-5xl py-4 sm:py-8">
               <div class="space-y-6 sm:space-y-8">
                 <div :class="isVerifyStep() ? 'mx-auto max-w-2xl space-y-3 text-center sm:space-y-4' : 'max-w-3xl space-y-3 sm:space-y-4'">
+                  <div class="flex items-center gap-2 text-xs font-semibold tracking-[0.12em] text-slate-300" :class="isVerifyStep() ? 'justify-center' : ''">
+                    <img src="/static/logo.svg" alt="" aria-hidden="true" class="h-6 w-6" />
+                    <span>MD Quiz</span>
+                  </div>
                   <div class="text-xs uppercase tracking-[0.28em] text-cyan-200/80" x-text="startLeadEyebrow()"></div>
                   <h1 class="text-[2.7rem] leading-[0.96] font-medium tracking-[-0.06em] text-white sm:mt-4 sm:text-6xl" x-text="quizTitle()"></h1>
                   <p class="text-sm leading-6 text-slate-300 sm:leading-7" x-text="startLeadText()"></p>

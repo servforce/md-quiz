@@ -1,3 +1,5 @@
+<img src="static/logo.svg" alt="MD Quiz 标志" width="72" />
+
 # MD Quiz
 
 `md-quiz` 是一套 `code-first`、`agent-ready`、持续演进的`agent-native`在线评估运行时。它把题库管理、候选人流程、答题执行、结果留档和后台运维放在同一套系统里，支持 Git 仓库维护题库、公开邀约、手机号短信验证、LLM 自动评分，以及后台和 MCP 两种接入方式。
